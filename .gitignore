@@ -1,0 +1,103 @@
+# ==========================================
+# Logs
+# ==========================================
+
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+
+# ==========================================
+# Node / Frontend
+# ==========================================
+
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+
+# ==========================================
+# Tauri / Rust
+# ==========================================
+
+src-tauri/target/
+
+
+# ==========================================
+# Python
+# ==========================================
+
+__pycache__/
+*.py[cod]
+*$py.class
+
+.venv/
+venv/
+env/
+ENV/
+
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+*.egg-info/
+build/
+*.whl
+
+
+# ==========================================
+# Machine Learning
+# ==========================================
+
+# Downloaded datasets
+data/raw/
+data/processed/
+
+# Generated outputs
+outputs/
+
+# Model weights
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.engine
+models/*.bin
+
+
+# ==========================================
+# Environment / Secrets
+# ==========================================
+
+.env
+.env.*
+!.env.example
+
+
+# ==========================================
+# IDE
+# ==========================================
+
+.vscode/*
+!.vscode/extensions.json
+
+.idea/
+.DS_Store
+
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+
+# ==========================================
+# OS
+# ==========================================
+
+Thumbs.db
+Desktop.ini
