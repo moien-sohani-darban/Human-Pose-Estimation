@@ -67,6 +67,8 @@ models/*.pth
 models/*.onnx
 models/*.engine
 models/*.bin
+models/**/*.task
+python-engine/models/**/*.task
 
 
 # ==========================================
