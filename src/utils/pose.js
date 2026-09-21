@@ -127,6 +127,70 @@ export function validatePoseResult(result) {
   );
 }
 
+export function normalizeModelMetadata(models) {
+  return models && typeof models === "object" && !Array.isArray(models)
+    ? models
+    : {};
+}
+
+export function getModelStatus(metadata, customPath) {
+  if (typeof customPath === "string" && customPath.trim()) {
+    return {
+      kind: "custom",
+      label: "Custom model selected",
+      guidance: "The selected file will be validated when the backend initializes.",
+    };
+  }
+
+  if (metadata?.exists === true) {
+    return {
+      kind: "ready",
+      label: "Default model ready",
+      guidance: "The canonical local model file is present.",
+    };
+  }
+
+  if (metadata?.exists === false) {
+    return {
+      kind: "missing",
+      label: "Default model missing",
+      guidance:
+        "Select a compatible local model with Browse. The expected default is shown below.",
+    };
+  }
+
+  return {
+    kind: "unknown",
+    label: "Model unavailable",
+    guidance: "Refresh backend availability to check the default model.",
+  };
+}
+
+export function withModelSetupGuidance(error, backend, defaultPath = "") {
+  if (error?.code !== "model_asset_not_found") return error;
+
+  const backendName = backend ? backendLabel(backend) : "This backend";
+  const expected = defaultPath ? ` Expected default: ${defaultPath}.` : "";
+
+  return {
+    ...error,
+    message: `${backendName} needs a compatible local model. Select one with Browse.${expected}`,
+  };
+}
+
+export function getDefaultModelDisplayPath(metadata) {
+  const value = metadata?.display_path;
+
+  if (typeof value !== "string" || !value.trim()) return "";
+
+  const clean = value.trim().replaceAll("\\", "/");
+
+  if (clean.startsWith("/") || /^[a-zA-Z]:\//.test(clean)) return "";
+
+  return clean;
+}
+
+
 export function setBackendModelPath(modelPaths, backend, path) {
   return { ...modelPaths, [backend]: path };
 }

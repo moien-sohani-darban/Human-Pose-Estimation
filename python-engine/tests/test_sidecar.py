@@ -18,6 +18,7 @@ from app.core import (
     PoseEngineConfig,
     UnsupportedBackendError,
 )
+from app.models import assets
 from app.models import (
     BackendInferenceError,
     BackendInitializationError,
@@ -238,16 +239,80 @@ def test_ping_is_ready_without_initializing_an_engine() -> None:
     assert stderr == ""
 
 
-def test_get_backends_reports_actual_availability() -> None:
+def test_get_backends_reports_actual_availability(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(assets, "ENGINE_ROOT", tmp_path)
+
     code, responses, _, _ = run_sidecar(
         ['{"id":2,"type":"get_backends"}']
     )
 
     assert code == 0
+    assert responses[0]["ok"] is True
     assert responses[0]["result"] == {
         "available": ["mediapipe", "yolo"],
         "unavailable": ["mmpose"],
+        "models": {
+            "mediapipe": {
+                "backend": "mediapipe",
+                "model_name": "mediapipe-pose-landmarker",
+                "default_path": "models/mediapipe/pose_landmarker.task",
+                "display_path": "models/mediapipe/pose_landmarker.task",
+                "exists": False,
+                "size_bytes": None,
+            },
+            "yolo": {
+                "backend": "yolo",
+                "model_name": "yolo11n-pose",
+                "default_path": "models/yolo/yolo11n-pose.pt",
+                "display_path": "models/yolo/yolo11n-pose.pt",
+                "exists": False,
+                "size_bytes": None,
+            },
+        },
     }
+
+
+@pytest.mark.parametrize(
+    ("mediapipe_present", "yolo_present"),
+    [(False, False), (True, False), (False, True), (True, True)],
+)
+def test_get_backends_model_metadata_tracks_files_without_initializing_engines(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    mediapipe_present: bool,
+    yolo_present: bool,
+) -> None:
+    monkeypatch.setattr(assets, "ENGINE_ROOT", tmp_path)
+    expected = {
+        "mediapipe": mediapipe_present,
+        "yolo": yolo_present,
+    }
+
+    for backend, present in expected.items():
+        if present:
+            path = assets.get_default_model_path(backend)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"asset")
+
+    factory = FakeEngineFactory()
+
+    _, responses, _, sidecar = run_sidecar(
+        ['{"id":"assets","type":"get_backends"}'],
+        factory=factory,
+    )
+
+    models = responses[0]["result"]["models"]
+
+    assert {
+        backend: metadata["exists"]
+        for backend, metadata in models.items()
+    } == expected
+
+    assert factory.engines == []
+    assert sidecar.initialized_backends == ()
 
 
 def test_estimate_decodes_image_and_returns_unified_result(tmp_path: Path) -> None:

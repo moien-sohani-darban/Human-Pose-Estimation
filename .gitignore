@@ -68,6 +68,8 @@ models/*.onnx
 models/*.engine
 models/*.bin
 models/**/*.task
+python-engine/models/**/*.pt
+python-engine/models/**/*.pth
 python-engine/models/**/*.task
 
 

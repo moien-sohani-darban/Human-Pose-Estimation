@@ -13,6 +13,7 @@ import numpy as np
 
 from ..core import PoseBackend, PoseEngine, PoseEngineConfig
 from ..models import PoseResult
+from ..models.assets import inspect_default_model_assets
 from ..models.base import ImageArray
 from .messages import (
     PROTOCOL_VERSION,
@@ -118,6 +119,10 @@ class PoseSidecar:
                     backend.value for backend in PoseEngine.available_backends()
                 ],
                 "unavailable": [PoseBackend.MMPOSE.value],
+                "models": {
+                    backend: status.to_dict()
+                    for backend, status in inspect_default_model_assets().items()
+                },
             }
             return success_response(request.request_id, result), False
         if request.request_type == "estimate":

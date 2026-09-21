@@ -1,7 +1,7 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::{
-    collections::VecDeque,
+    collections::{BTreeMap, VecDeque},
     env,
     ffi::OsString,
     fmt,
@@ -62,6 +62,18 @@ pub struct PingResult {
 pub struct BackendsResult {
     pub available: Vec<String>,
     pub unavailable: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub models: Option<BTreeMap<String, ModelAssetStatusDto>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelAssetStatusDto {
+    pub backend: String,
+    pub model_name: String,
+    pub default_path: String,
+    pub display_path: String,
+    pub exists: bool,
+    pub size_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -811,6 +823,24 @@ for line in sys.stdin:
     }
 
     #[test]
+    fn backend_dto_parses_additive_model_metadata_and_legacy_shape() {
+        let json = r#"{"id":1,"ok":true,"result":{"available":["mediapipe","yolo"],"unavailable":["mmpose"],"models":{"mediapipe":{"backend":"mediapipe","model_name":"mediapipe-pose-landmarker","default_path":"models/mediapipe/pose_landmarker.task","display_path":"models/mediapipe/pose_landmarker.task","exists":true,"size_bytes":42},"yolo":{"backend":"yolo","model_name":"yolo11n-pose","default_path":"models/yolo/yolo11n-pose.pt","display_path":"models/yolo/yolo11n-pose.pt","exists":false,"size_bytes":null}}}}"#;
+
+        let result: BackendsResult = parse_response(json, 1).unwrap();
+        let models = result.models.unwrap();
+
+        assert!(models["mediapipe"].exists);
+        assert_eq!(models["mediapipe"].size_bytes, Some(42));
+        assert_eq!(models["yolo"].display_path, "models/yolo/yolo11n-pose.pt");
+        assert_eq!(models["yolo"].size_bytes, None);
+
+        let legacy = r#"{"id":2,"ok":true,"result":{"available":["mediapipe"],"unavailable":[]}}"#;
+
+        let result: BackendsResult = parse_response(legacy, 2).unwrap();
+        assert_eq!(result.models, None);
+    }
+
+    #[test]
     fn preserves_distinct_python_error_codes() {
         for code in [
             "backend_unavailable",
@@ -985,6 +1015,33 @@ for line in sys.stdin:
         let backends = manager.get_backends().unwrap();
         assert_eq!(backends.available, ["mediapipe", "yolo"]);
         assert_eq!(backends.unavailable, ["mmpose"]);
+
+        let models = backends.models.expect("real Python metadata is required");
+
+        assert_eq!(
+            models.keys().cloned().collect::<Vec<_>>(),
+            ["mediapipe", "yolo"]
+        );
+        assert_eq!(
+            models["mediapipe"].display_path,
+            "models/mediapipe/pose_landmarker.task"
+        );
+        assert_eq!(models["yolo"].display_path, "models/yolo/yolo11n-pose.pt");
+
+        let engine_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("python-engine");
+
+        for model in models.values() {
+            let expected_path = engine_root.join(&model.default_path);
+
+            assert_eq!(model.exists, expected_path.is_file());
+            assert_eq!(
+                model.size_bytes,
+                expected_path.metadata().ok().map(|metadata| metadata.len())
+            );
+        }
+
         manager.shutdown().unwrap();
         assert!(!manager.is_running());
     }

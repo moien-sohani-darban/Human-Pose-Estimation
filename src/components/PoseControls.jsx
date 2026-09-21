@@ -1,4 +1,8 @@
-import { backendLabel } from "../utils/pose";
+import {
+  backendLabel,
+  getDefaultModelDisplayPath,
+  getModelStatus,
+} from "../utils/pose";
 
 const BACKEND_DESCRIPTIONS = {
   mediapipe: "Detailed canonical 33-landmark pose estimation.",
@@ -26,6 +30,15 @@ export default function PoseControls({
       selectedBackend &&
       backendState.available.includes(selectedBackend) &&
       !isProcessing,
+  );
+
+  const selectedModelMetadata = backendState.models?.[selectedBackend];
+  const selectedModelStatus = getModelStatus(
+    selectedModelMetadata,
+    modelPath,
+  );
+  const defaultDisplayPath = getDefaultModelDisplayPath(
+    selectedModelMetadata,
   );
 
   return (
@@ -135,6 +148,21 @@ export default function PoseControls({
                         {BACKEND_DESCRIPTIONS[backend] ??
                           "Available pose-estimation backend."}
                       </small>
+                      <small
+                        className={`backend-model-state ${
+                          getModelStatus(
+                            backendState.models?.[backend],
+                            "",
+                          ).kind
+                        }`}
+                      >
+                        {
+                          getModelStatus(
+                            backendState.models?.[backend],
+                            "",
+                          ).label
+                        }
+                      </small>
                     </span>
 
                     <span
@@ -171,7 +199,7 @@ export default function PoseControls({
           <span className="step-number">03</span>
           <div>
             <h2>Model file</h2>
-            <p>Optional development-time override</p>
+            <p>Use the default or select a compatible local model</p>
           </div>
         </div>
 
@@ -187,7 +215,11 @@ export default function PoseControls({
             className="path-input"
             value={modelPath}
             onChange={(event) => onModelPathChange(event.target.value)}
-            placeholder="Optional model path"
+            placeholder={
+              defaultDisplayPath
+                ? `Default: ${defaultDisplayPath}`
+                : "Optional custom model path"
+            }
             disabled={!selectedBackend || isProcessing}
             spellCheck="false"
           />
@@ -202,9 +234,25 @@ export default function PoseControls({
           </button>
         </div>
 
-        <p className="field-hint">
-          Leave blank to use the backend default.
-        </p>
+        {selectedBackend && (
+          <div
+            className={`model-status model-status-${selectedModelStatus.kind}`}
+            role="status"
+          >
+            <strong>{selectedModelStatus.label}</strong>
+            <span>{selectedModelStatus.guidance}</span>
+          </div>
+        )}
+
+        {defaultDisplayPath ? (
+          <p className="field-hint">
+            Default: <code>{defaultDisplayPath}</code>
+          </p>
+        ) : (
+          <p className="field-hint">
+            Leave blank to use the backend&apos;s default local path.
+          </p>
+        )}
       </section>
 
       <button

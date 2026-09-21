@@ -12,6 +12,8 @@ from typing import Any
 
 import numpy as np
 
+from .assets import get_default_model_path, get_model_asset_definition
+
 from .base import (
     BoundingBox,
     ImageArray,
@@ -40,8 +42,8 @@ else:
 
 
 BACKEND_ID = "yolo"
-DEFAULT_MODEL_NAME = "yolo11n-pose.pt"
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[2] / "models" / "yolo" / DEFAULT_MODEL_NAME
+DEFAULT_MODEL_NAME = get_model_asset_definition(BACKEND_ID).relative_path.name
+DEFAULT_MODEL_PATH = get_default_model_path(BACKEND_ID)
 
 # (YOLO index, canonical project index, canonical project name)
 YOLO_COCO_KEYPOINT_MAPPING: tuple[tuple[int, int, str], ...] = (
@@ -153,7 +155,9 @@ def resolve_yolo_model_path(model_path: str | Path | None = None) -> Path:
     """Resolve a configured path or the deterministic project-local default."""
     try:
         candidate = (
-            DEFAULT_MODEL_PATH if model_path is None else Path(model_path)
+            get_default_model_path(BACKEND_ID)
+            if model_path is None
+            else Path(model_path)
         )
     except TypeError as error:
         raise YoloInvalidConfigurationError(

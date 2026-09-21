@@ -5,9 +5,13 @@ import {
   CANONICAL_SKELETON,
   fileNameFromPath,
   formatPeopleCount,
+  getDefaultModelDisplayPath,
+  getModelStatus,
+  normalizeModelMetadata,
   resolveSkeletonSegments,
   setBackendModelPath,
   validatePoseResult,
+  withModelSetupGuidance,
 } from "./pose.js";
 
 const point = (index, name, x, y) => ({
@@ -108,4 +112,54 @@ test("separate backend model paths remain independent", () => {
     yolo: "pose.pt",
   });
   assert.deepEqual(initial, { mediapipe: "", yolo: "" });
+});
+
+test("model status distinguishes missing, ready, custom, and absent metadata", () => {
+  assert.equal(getModelStatus({ exists: false }, "").label, "Default model missing");
+  assert.equal(getModelStatus({ exists: true }, "").label, "Default model ready");
+  assert.equal(
+    getModelStatus({ exists: false }, String.raw`C:\Models\pose.task`).label,
+    "Custom model selected",
+  );
+  assert.equal(getModelStatus(undefined, "").kind, "unknown");
+  assert.deepEqual(normalizeModelMetadata(undefined), {});
+});
+
+test("default model hint stays project-relative and never leaks absolute paths", () => {
+  assert.equal(
+    getDefaultModelDisplayPath({
+      display_path: "models/mediapipe/pose_landmarker.task",
+    }),
+    "models/mediapipe/pose_landmarker.task",
+  );
+  assert.equal(
+    getDefaultModelDisplayPath({
+      display_path: String.raw`F:\repo\model.task`,
+    }),
+    "",
+  );
+  assert.equal(
+    getDefaultModelDisplayPath({
+      display_path: "/repo/model.task",
+    }),
+    "",
+  );
+});
+
+test("missing-model guidance identifies backend and logical default", () => {
+  assert.deepEqual(
+    withModelSetupGuidance(
+      {
+        code: "model_asset_not_found",
+        message: "hidden machine path",
+      },
+      "mediapipe",
+      "models/mediapipe/pose_landmarker.task",
+    ),
+    {
+      code: "model_asset_not_found",
+      message:
+        "MediaPipe needs a compatible local model. Select one with Browse. Expected default: models/mediapipe/pose_landmarker.task.",
+    },
+  );
 });

@@ -74,3 +74,30 @@ python -m pytest
 Unit tests use fake deterministic landmarker results and require no GPU,
 network, or model file. The integration test uses the default local model and
 an existing image fixture; it skips cleanly when that model is absent.
+
+## Local model assets
+
+Supported pose backends use deterministic project-local model locations:
+
+    python-engine/models/mediapipe/pose_landmarker.task
+    python-engine/models/yolo/yolo11n-pose.pt
+
+These paths are resolved from the python-engine package location rather than
+the current working directory, so launching the engine from another directory
+does not change the default model location.
+
+Model acquisition is manual. The application does not silently download
+models, search user caches, or fall back to another location. Place a
+compatible model at its canonical path or select another local file through
+the model-path override. An explicit model path always takes precedence over
+the canonical default.
+
+Backend discovery exposes lightweight filesystem metadata for each canonical
+model, including its logical path, whether the file exists, and its size when
+available. An exists=true value only means that a regular file is present;
+backend initialization remains responsible for validating model compatibility.
+
+Model binaries under python-engine/models are intentionally excluded from Git
+for the .task, .pt, and .pth extensions. The tracked .gitkeep files preserve
+the expected directory structure without committing large or license-sensitive
+model assets.

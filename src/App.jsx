@@ -11,8 +11,11 @@ import PoseControls from "./components/PoseControls";
 import ResultSummary from "./components/ResultSummary";
 import {
   fileNameFromPath,
+  getDefaultModelDisplayPath,
+  normalizeModelMetadata,
   setBackendModelPath,
   validatePoseResult,
+  withModelSetupGuidance,
 } from "./utils/pose";
 import "./App.css";
 
@@ -20,6 +23,7 @@ const initialBackendState = {
   status: "loading",
   available: [],
   unavailable: [],
+  models: {},
   error: null,
 };
 
@@ -65,6 +69,7 @@ function App() {
         status: "ready",
         available: response.available,
         unavailable: response.unavailable,
+        models: normalizeModelMetadata(response.models),
         error: null,
       });
 
@@ -81,6 +86,7 @@ function App() {
         status: "error",
         available: [],
         unavailable: [],
+        models: {},
         error,
       });
     }
@@ -154,6 +160,10 @@ function App() {
     setEstimateStatus("idle");
   }
 
+  const selectedDefaultModelPath = getDefaultModelDisplayPath(
+    backendState.models?.[selectedBackend],
+  );
+
   async function runEstimate() {
     if (
       !selectedImage ||
@@ -186,7 +196,13 @@ function App() {
       setEstimateStatus("success");
     } catch (error) {
       setPoseResult(null);
-      setEstimateError(error);
+      setEstimateError(
+        withModelSetupGuidance(
+          error,
+          selectedBackend,
+          selectedDefaultModelPath,
+        ),
+      );
       setEstimateStatus("error");
     }
   }

@@ -20,6 +20,7 @@ from .base import (
     PoseEstimator,
     PoseResult,
 )
+from .assets import get_default_model_path
 from .errors import (
     BackendInferenceError,
     BackendInitializationError,
@@ -32,12 +33,7 @@ from .errors import (
 
 
 BACKEND_ID = "mediapipe"
-DEFAULT_MODEL_PATH = (
-    Path(__file__).resolve().parents[2]
-    / "models"
-    / "mediapipe"
-    / "pose_landmarker.task"
-)
+DEFAULT_MODEL_PATH = get_default_model_path(BACKEND_ID)
 
 
 def _installed_landmark_names() -> tuple[str, ...]:
@@ -109,7 +105,11 @@ class MediaPipePoseConfig:
 def resolve_model_path(model_path: str | Path | None = None) -> Path:
     """Resolve an explicit path or the documented project-local default."""
     try:
-        candidate = DEFAULT_MODEL_PATH if model_path is None else Path(model_path)
+        candidate = (
+            get_default_model_path(BACKEND_ID)
+            if model_path is None
+            else Path(model_path)
+        )
     except TypeError as error:
         raise InvalidConfigurationError("model_path must be a path-like value") from error
 

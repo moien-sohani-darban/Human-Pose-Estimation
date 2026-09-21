@@ -113,3 +113,62 @@ test("PoseOverlay renders no primitives for a zero-person success", async () => 
     await vite.close();
   }
 });
+
+test("model controls expose canonical default state without absolute paths", async () => {
+  const vite = await createServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+
+  try {
+    const { default: PoseControls } = await vite.ssrLoadModule(
+      "/src/components/PoseControls.jsx",
+    );
+
+    const markup = renderToStaticMarkup(
+      PoseControls({
+        backendState: {
+          status: "ready",
+          available: ["mediapipe", "yolo"],
+          unavailable: ["mmpose"],
+          models: {
+            mediapipe: {
+              backend: "mediapipe",
+              model_name: "mediapipe-pose-landmarker",
+              default_path: "models/mediapipe/pose_landmarker.task",
+              display_path: "models/mediapipe/pose_landmarker.task",
+              exists: false,
+              size_bytes: null,
+            },
+            yolo: {
+              backend: "yolo",
+              model_name: "yolo11n-pose",
+              default_path: "models/yolo/yolo11n-pose.pt",
+              display_path: "models/yolo/yolo11n-pose.pt",
+              exists: true,
+              size_bytes: 42,
+            },
+          },
+        },
+        selectedBackend: "mediapipe",
+        selectedImage: null,
+        modelPath: "",
+        estimateStatus: "idle",
+        onBackendChange() {},
+        onChooseImage() {},
+        onChooseModel() {},
+        onEstimate() {},
+        onRetryBackends() {},
+        onModelPathChange() {},
+        onClearImage() {},
+      }),
+    );
+
+    assert.match(markup, /Default model missing/);
+    assert.match(markup, /Default model ready/);
+    assert.match(markup, /models\/mediapipe\/pose_landmarker\.task/);
+    assert.doesNotMatch(markup, /[A-Z]:\\/i);
+  } finally {
+    await vite.close();
+  }
+});
