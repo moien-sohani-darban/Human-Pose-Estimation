@@ -57,6 +57,7 @@ async fn python_shutdown_sidecar(
 pub fn run() {
     let application = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             app.manage(PythonSidecarManager::new());
             Ok(())
