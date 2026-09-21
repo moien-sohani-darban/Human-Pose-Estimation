@@ -11,6 +11,7 @@ dependencies = [
     "mediapipe==1.0.1",
     "numpy==2.5.2",
     "opencv-contrib-python==5.0.0.93",
+    "ultralytics==8.4.115",
 ]
 
 [project.optional-dependencies]
@@ -29,5 +30,5 @@ addopts = [
 ]
 testpaths = ["tests"]
 markers = [
-    "integration: requires a local MediaPipe Pose Landmarker model asset",
+    "integration: requires a local backend model asset",
 ]
