@@ -1,8 +1,8 @@
 mod sidecar;
 
 use sidecar::{
-    BackendsResult, BridgeError, EstimatePoseRequest, PingResult, PoseResultDto,
-    PythonSidecarManager,
+    BackendsResult, BridgeError, EstimateFrameRequest, EstimatePoseRequest, PingResult,
+    PoseResultDto, PythonSidecarManager,
 };
 use tauri::{Manager, RunEvent, State};
 
@@ -46,6 +46,15 @@ async fn python_estimate_pose(
 }
 
 #[tauri::command]
+async fn python_estimate_frame(
+    manager: State<'_, PythonSidecarManager>,
+    request: EstimateFrameRequest,
+) -> Result<PoseResultDto, BridgeError> {
+    let manager = manager.inner().clone();
+    run_blocking(move || manager.estimate_frame(request)).await
+}
+
+#[tauri::command]
 async fn python_shutdown_sidecar(
     manager: State<'_, PythonSidecarManager>,
 ) -> Result<(), BridgeError> {
@@ -66,6 +75,7 @@ pub fn run() {
             python_sidecar_ping,
             python_get_backends,
             python_estimate_pose,
+            python_estimate_frame,
             python_shutdown_sidecar
         ])
         .build(tauri::generate_context!())

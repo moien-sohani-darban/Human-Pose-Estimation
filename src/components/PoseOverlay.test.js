@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServer } from "vite";
 
@@ -168,6 +169,39 @@ test("model controls expose canonical default state without absolute paths", asy
     assert.match(markup, /Default model ready/);
     assert.match(markup, /models\/mediapipe\/pose_landmarker\.task/);
     assert.doesNotMatch(markup, /[A-Z]:\\/i);
+  } finally {
+    await vite.close();
+  }
+});
+
+test("webcam workspace starts with camera and live inference off", async () => {
+  const vite = await createServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+
+  try {
+    const { default: WebcamWorkspace } = await vite.ssrLoadModule(
+      "/src/components/WebcamWorkspace.jsx",
+    );
+
+    const markup = renderToStaticMarkup(
+      React.createElement(WebcamWorkspace, {
+        selectedBackend: "mediapipe",
+        modelPath: "",
+        defaultModelPath: "",
+        overlayOptions: {
+          skeleton: true,
+          keypoints: true,
+          boxes: true,
+        },
+        onLiveChange() {},
+      }),
+    );
+
+    assert.match(markup, /Start the camera/);
+    assert.match(markup, /Start Camera/);
+    assert.doesNotMatch(markup, /Live estimation active/);
   } finally {
     await vite.close();
   }

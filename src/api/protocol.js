@@ -39,6 +39,14 @@ const ERROR_MESSAGES = {
     "The pose backend could not start. Select a compatible model and try again.",
   backend_inference_failed:
     "The pose backend could not process this input. Check the input and model, then try again.",
+  invalid_frame_data:
+    "The captured camera frame was invalid. Stop and restart live estimation, then try again.",
+  frame_decode_failed:
+    "The captured camera frame could not be decoded. Stop and restart live estimation.",
+  frame_encode_failed:
+    "The camera frame could not be prepared. Stop and restart live estimation.",
+  frame_too_large:
+    "The captured camera frame was too large to process safely. Reduce the camera resolution and try again.",
   internal_error:
     "The local pose engine encountered an unexpected problem. Restart the application and try again.",
 };
@@ -92,6 +100,21 @@ export function buildEstimateArguments({ backend, imagePath, modelPath }) {
     request: {
       backend,
       imagePath,
+      modelPath: cleanModelPath,
+    },
+  };
+}
+
+export function buildEstimateFrameArguments({ backend, frameData, modelPath }) {
+  const cleanModelPath =
+    typeof modelPath === "string" && modelPath.trim()
+      ? modelPath.trim()
+      : null;
+
+  return {
+    request: {
+      backend,
+      frameData: Array.from(frameData),
       modelPath: cleanModelPath,
     },
   };

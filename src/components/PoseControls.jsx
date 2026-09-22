@@ -15,6 +15,8 @@ export default function PoseControls({
   selectedImage,
   modelPath,
   estimateStatus,
+  liveLocked,
+  inputMode,
   onBackendChange,
   onChooseImage,
   onChooseModel,
@@ -24,12 +26,15 @@ export default function PoseControls({
   onClearImage,
 }) {
   const isProcessing = estimateStatus === "processing";
+  const controlsLocked = isProcessing || liveLocked;
+  const imageMode = inputMode !== "webcam";
 
   const canEstimate = Boolean(
+    imageMode &&
     selectedImage &&
       selectedBackend &&
       backendState.available.includes(selectedBackend) &&
-      !isProcessing,
+      !controlsLocked,
   );
 
   const selectedModelMetadata = backendState.models?.[selectedBackend];
@@ -56,7 +61,7 @@ export default function PoseControls({
           type="button"
           className="secondary-button full-width"
           onClick={onChooseImage}
-          disabled={isProcessing}
+          disabled={controlsLocked || !imageMode}
         >
           {selectedImage ? "Choose another image" : "Choose image"}
         </button>
@@ -72,7 +77,7 @@ export default function PoseControls({
               type="button"
               className="text-button"
               onClick={onClearImage}
-              disabled={isProcessing}
+              disabled={controlsLocked || !imageMode}
             >
               Clear
             </button>
@@ -92,7 +97,7 @@ export default function PoseControls({
             type="button"
             className="icon-button"
             onClick={onRetryBackends}
-            disabled={backendState.status === "loading" || isProcessing}
+            disabled={backendState.status === "loading" || controlsLocked}
             aria-label="Refresh backend availability"
             title="Refresh backend availability"
           >
@@ -140,7 +145,7 @@ export default function PoseControls({
                       value={backend}
                       checked={selectedBackend === backend}
                       onChange={() => onBackendChange(backend)}
-                      disabled={isProcessing}
+                      disabled={controlsLocked}
                     />
                     <span>
                       <strong>{backendLabel(backend)}</strong>
@@ -220,7 +225,7 @@ export default function PoseControls({
                 ? `Default: ${defaultDisplayPath}`
                 : "Optional custom model path"
             }
-            disabled={!selectedBackend || isProcessing}
+            disabled={!selectedBackend || controlsLocked}
             spellCheck="false"
           />
 
@@ -228,7 +233,7 @@ export default function PoseControls({
             type="button"
             className="browse-button"
             onClick={onChooseModel}
-            disabled={!selectedBackend || isProcessing}
+            disabled={!selectedBackend || controlsLocked}
           >
             Browse
           </button>

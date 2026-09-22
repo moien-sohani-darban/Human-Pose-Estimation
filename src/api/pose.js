@@ -2,6 +2,7 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
   buildEstimateArguments,
+  buildEstimateFrameArguments,
   normalizeCommandError,
 } from "./protocol.js";
 
@@ -28,6 +29,17 @@ export async function estimatePose(options) {
     return await invoke(
       "python_estimate_pose",
       buildEstimateArguments(options),
+    );
+  } catch (error) {
+    throw normalizeCommandError(error);
+  }
+}
+
+export async function estimatePoseFrame(options) {
+  try {
+    return await invoke(
+      "python_estimate_frame",
+      buildEstimateFrameArguments(options),
     );
   } catch (error) {
     throw normalizeCommandError(error);

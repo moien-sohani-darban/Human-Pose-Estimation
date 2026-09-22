@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import base64
 import io
 import json
 from pathlib import Path
@@ -118,6 +119,18 @@ def estimate_request(
         request["backend_config"] = {"model_path": str(model_path)}
     return request
 
+
+def estimate_frame_request(
+    request_id: str,
+    backend: str,
+    frame_bytes: bytes,
+) -> dict[str, Any]:
+    return {
+        "id": request_id,
+        "type": "estimate_frame",
+        "backend": backend,
+        "image_base64": base64.b64encode(frame_bytes).decode("ascii"),
+    }
 
 def run_sidecar(
     requests: list[str],
@@ -332,6 +345,101 @@ def test_estimate_decodes_image_and_returns_unified_result(tmp_path: Path) -> No
     assert decoded.shape == (10, 20, 3)
     assert decoded.dtype == np.uint8
 
+
+def test_estimate_frame_decodes_memory_image_and_returns_unified_result() -> None:
+    source = np.full((12, 18, 3), (10, 40, 220), dtype=np.uint8)
+    encoded_ok, encoded = cv2.imencode(".jpg", source)
+    assert encoded_ok
+    factory = FakeEngineFactory()
+    request = json.dumps(
+        estimate_frame_request("frame-1", "mediapipe", encoded.tobytes())
+    )
+
+    code, responses, _, _ = run_sidecar([request], factory=factory)
+
+    assert code == 0
+    assert responses[0]["ok"] is True
+    decoded = factory.engines[0].estimate_calls[0]
+    assert decoded.shape == (12, 18, 3)
+    assert decoded.dtype == np.uint8
+
+
+def test_image_and_frame_requests_reuse_the_same_backend_engine(tmp_path: Path) -> None:
+    image_path = write_image(tmp_path / "person.png")
+    source = np.full((8, 9, 3), 80, dtype=np.uint8)
+    encoded_ok, encoded = cv2.imencode(".jpg", source)
+    assert encoded_ok
+    factory = FakeEngineFactory()
+    requests = [
+        json.dumps(estimate_request("path", "yolo", image_path)),
+        json.dumps(estimate_frame_request("frame", "yolo", encoded.tobytes())),
+    ]
+
+    _, responses, _, _ = run_sidecar(requests, factory=factory)
+
+    assert all(response["ok"] for response in responses)
+    assert len(factory.engines) == 1
+    assert len(factory.engines[0].estimate_calls) == 2
+
+
+@pytest.mark.parametrize("value", [None, 42, "", "%%not-base64%%", "8J+YgA"])
+def test_invalid_frame_data_is_typed_and_recoverable(value: object) -> None:
+    request = {
+        "id": "bad-frame",
+        "type": "estimate_frame",
+        "backend": "mediapipe",
+        "image_base64": value,
+    }
+    _, responses, _, _ = run_sidecar(
+        [json.dumps(request), '{"id":"after","type":"ping"}']
+    )
+
+    assert responses[0]["error"]["code"] == "invalid_frame_data"
+    assert responses[1]["ok"] is True
+
+
+def test_corrupt_encoded_frame_is_decode_failed() -> None:
+    request = estimate_frame_request("corrupt", "mediapipe", b"not an image")
+
+    _, responses, _, _ = run_sidecar([json.dumps(request)])
+
+    assert responses[0]["error"]["code"] == "frame_decode_failed"
+
+
+def test_frame_size_limit_is_checked_before_decode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.protocol.sidecar as sidecar_module
+
+    monkeypatch.setattr(sidecar_module, "MAX_FRAME_BYTES", 3)
+    monkeypatch.setattr(sidecar_module, "MAX_FRAME_BASE64_CHARS", 4)
+    request = estimate_frame_request("large", "mediapipe", b"four")
+
+    _, responses, _, _ = run_sidecar([json.dumps(request)])
+
+    assert responses[0]["error"]["code"] == "frame_too_large"
+
+
+def test_decoded_frame_size_limit_is_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.protocol.sidecar as sidecar_module
+
+    monkeypatch.setattr(sidecar_module, "MAX_FRAME_BYTES", 3)
+    monkeypatch.setattr(sidecar_module, "MAX_FRAME_BASE64_CHARS", 100)
+    request = estimate_frame_request("large-decoded", "mediapipe", b"four")
+
+    _, responses, _, _ = run_sidecar([json.dumps(request)])
+
+    assert responses[0]["error"]["code"] == "frame_too_large"
+
+
+def test_empty_decoded_frame_is_invalid() -> None:
+    request = estimate_frame_request("empty", "mediapipe", b"")
+
+    _, responses, _, _ = run_sidecar([json.dumps(request)])
+
+    assert responses[0]["error"]["code"] == "invalid_frame_data"
 
 def test_same_backend_engine_is_created_once_and_reused(tmp_path: Path) -> None:
     image_path = write_image(tmp_path / "person.png")

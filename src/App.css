@@ -650,3 +650,52 @@ input:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+
+.input-mode-switch {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #26364d;
+  border-radius: 10px;
+  background: #111b2b;
+}
+
+.input-mode-switch button {
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 14px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.input-mode-switch button.active {
+  background: #6f5cf4;
+  color: white;
+}
+
+.input-mode-switch button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.webcam-stage video {
+  display: block;
+  max-width: 100%;
+  max-height: 68vh;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+}
+
+.webcam-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.capture-canvas {
+  display: none;
+}

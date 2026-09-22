@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import redirect_stdout
+import base64
+import binascii
 from dataclasses import dataclass
 from pathlib import Path
 import traceback
@@ -40,6 +42,10 @@ class Engine(Protocol):
 
 EngineFactory = Callable[[PoseEngineConfig], Engine]
 ImageLoader = Callable[[str, int], np.ndarray | None]
+
+MAX_FRAME_BYTES = 4 * 1024 * 1024
+MAX_FRAME_BASE64_CHARS = ((MAX_FRAME_BYTES + 2) // 3) * 4
+
 
 @dataclass(frozen=True, slots=True)
 class _BackendSelection:
@@ -128,6 +134,9 @@ class PoseSidecar:
         if request.request_type == "estimate":
             result = self._estimate(request)
             return success_response(request.request_id, result), False
+        if request.request_type == "estimate_frame":
+            result = self._estimate_frame(request)
+            return success_response(request.request_id, result), False
         if request.request_type == "shutdown":
             self.close()
             result = {"status": "shutdown"}
@@ -137,10 +146,82 @@ class PoseSidecar:
     def _estimate(self, request: ProtocolRequest) -> JsonObject:
         selection = self._parse_backend_selection(request)
         image = self._load_image(request)
+        return self._estimate_image(request, selection, image)
+
+    def _estimate_frame(self, request: ProtocolRequest) -> JsonObject:
+        selection = self._parse_backend_selection(request)
+        image = self._decode_frame(request)
+        return self._estimate_image(request, selection, image)
+
+    def _estimate_image(
+        self,
+        request: ProtocolRequest,
+        selection: _BackendSelection,
+        image: ImageArray,
+    ) -> JsonObject:
         engine = self._get_engine(selection, request.request_id)
         with redirect_stdout(self.stderr):
             result = engine.estimate(image)
         return serialize_pose_result(result)
+
+    def _decode_frame(self, request: ProtocolRequest) -> ImageArray:
+        value = request.fields.get("image_base64")
+        if not isinstance(value, str) or not value:
+            raise ProtocolError(
+                "invalid_frame_data",
+                "image_base64 must be a non-empty base64 string",
+                request_id=request.request_id,
+            )
+        if len(value) > MAX_FRAME_BASE64_CHARS:
+            raise ProtocolError(
+                "frame_too_large",
+                f"Encoded frame exceeds the {MAX_FRAME_BYTES}-byte limit",
+                request_id=request.request_id,
+            )
+        try:
+            encoded = value.encode("ascii")
+            frame_bytes = base64.b64decode(encoded, validate=True)
+        except (UnicodeEncodeError, binascii.Error, ValueError) as error:
+            raise ProtocolError(
+                "invalid_frame_data",
+                "image_base64 is not valid canonical base64 data",
+                request_id=request.request_id,
+            ) from error
+        if not frame_bytes:
+            raise ProtocolError(
+                "invalid_frame_data",
+                "Decoded frame data must not be empty",
+                request_id=request.request_id,
+            )
+        if len(frame_bytes) > MAX_FRAME_BYTES:
+            raise ProtocolError(
+                "frame_too_large",
+                f"Decoded frame exceeds the {MAX_FRAME_BYTES}-byte limit",
+                request_id=request.request_id,
+            )
+        try:
+            buffer = np.frombuffer(frame_bytes, dtype=np.uint8)
+            with redirect_stdout(self.stderr):
+                image = cv2.imdecode(buffer, cv2.IMREAD_COLOR)
+        except (cv2.error, RuntimeError, ValueError) as error:
+            raise ProtocolError(
+                "frame_decode_failed",
+                "Frame could not be decoded as an image",
+                request_id=request.request_id,
+            ) from error
+        if (
+            not isinstance(image, np.ndarray)
+            or image.size == 0
+            or image.ndim != 3
+            or image.shape[2] != 3
+            or image.dtype != np.uint8
+        ):
+            raise ProtocolError(
+                "frame_decode_failed",
+                "Frame could not be decoded as an OpenCV BGR uint8 image",
+                request_id=request.request_id,
+            )
+        return image
 
     def _parse_backend_selection(
         self,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   createPreviewSource,
   estimatePose,
@@ -9,6 +9,7 @@ import {
 import ImageWorkspace from "./components/ImageWorkspace";
 import PoseControls from "./components/PoseControls";
 import ResultSummary from "./components/ResultSummary";
+import WebcamWorkspace from "./components/WebcamWorkspace";
 import {
   fileNameFromPath,
   getDefaultModelDisplayPath,
@@ -31,6 +32,15 @@ function App() {
   const [backendState, setBackendState] = useState(initialBackendState);
   const [selectedBackend, setSelectedBackend] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
+  const [inputMode, setInputMode] = useState("image");
+  const [liveLocked, setLiveLocked] = useState(false);
+  const [webcamPresentation, setWebcamPresentation] = useState({
+    cameraStatus: "idle",
+    liveStatus: "idle",
+    result: null,
+    inferenceFps: null,
+  });
+  const webcamRef = useRef(null);
   const [modelPaths, setModelPaths] = useState({
     mediapipe: "",
     yolo: "",
@@ -120,7 +130,13 @@ function App() {
   }
 
   async function chooseModel() {
-    if (!selectedBackend || estimateStatus === "processing") return;
+    if (
+      !selectedBackend ||
+      estimateStatus === "processing" ||
+      liveLocked
+    ) {
+      return;
+    }
 
     setInteractionError(null);
 
@@ -139,6 +155,7 @@ function App() {
   function changeBackend(backend) {
     if (
       estimateStatus === "processing" ||
+      liveLocked ||
       !backendState.available.includes(backend)
     ) {
       return;
@@ -148,6 +165,17 @@ function App() {
     setPoseResult(null);
     setEstimateError(null);
     setEstimateStatus(selectedImage ? "ready" : "idle");
+  }
+
+  function changeInputMode(nextMode) {
+    if (nextMode === inputMode) return;
+
+    if (inputMode === "webcam") {
+      webcamRef.current?.stopCamera();
+    }
+
+    setLiveLocked(false);
+    setInputMode(nextMode);
   }
 
   function clearImage() {
@@ -212,7 +240,7 @@ function App() {
       <header className="app-header">
         <div>
           <h1>Human Pose Estimation</h1>
-          <p>Local image pose analysis with MediaPipe and YOLO Pose</p>
+          <p>Local image and webcam pose analysis with MediaPipe and YOLO Pose</p>
         </div>
 
         <span
@@ -247,6 +275,8 @@ function App() {
           selectedImage={selectedImage}
           modelPath={modelPaths[selectedBackend] ?? ""}
           estimateStatus={estimateStatus}
+          liveLocked={liveLocked}
+          inputMode={inputMode}
           onBackendChange={changeBackend}
           onChooseImage={chooseImage}
           onChooseModel={chooseModel}
@@ -261,14 +291,49 @@ function App() {
         />
 
         <div className="content-column">
-          <ImageWorkspace
-            selectedImage={selectedImage}
-            result={poseResult}
-            estimateStatus={estimateStatus}
-            estimateError={estimateError}
-            overlayOptions={overlayOptions}
-            onChooseImage={chooseImage}
-          />
+          <div
+            className="input-mode-switch"
+            role="tablist"
+            aria-label="Input mode"
+          >
+            <button
+              type="button"
+              className={inputMode === "image" ? "active" : ""}
+              onClick={() => changeInputMode("image")}
+              disabled={liveLocked}
+            >
+              Image
+            </button>
+
+            <button
+              type="button"
+              className={inputMode === "webcam" ? "active" : ""}
+              onClick={() => changeInputMode("webcam")}
+            >
+              Webcam
+            </button>
+          </div>
+
+          {inputMode === "image" ? (
+            <ImageWorkspace
+              selectedImage={selectedImage}
+              result={poseResult}
+              estimateStatus={estimateStatus}
+              estimateError={estimateError}
+              overlayOptions={overlayOptions}
+              onChooseImage={chooseImage}
+            />
+          ) : (
+            <WebcamWorkspace
+              ref={webcamRef}
+              selectedBackend={selectedBackend}
+              modelPath={modelPaths[selectedBackend] ?? ""}
+              defaultModelPath={selectedDefaultModelPath}
+              overlayOptions={overlayOptions}
+              onLiveChange={setLiveLocked}
+              onPresentationChange={setWebcamPresentation}
+            />
+          )}
 
           <div className="overlay-controls">
             <label>
@@ -314,7 +379,13 @@ function App() {
             </label>
           </div>
 
-          <ResultSummary result={poseResult} />
+          <ResultSummary
+            result={
+              inputMode === "webcam"
+                ? webcamPresentation.result
+                : poseResult
+            }
+          />
         </div>
       </div>
     </main>

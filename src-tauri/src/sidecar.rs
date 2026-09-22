@@ -1,3 +1,4 @@
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -17,6 +18,8 @@ const PROTOCOL_VERSION: u8 = 1;
 const DIAGNOSTIC_LIMIT: usize = 32;
 pub const SHORT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 pub const ESTIMATE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
+pub const LIVE_FRAME_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
+pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct BridgeError {
@@ -119,6 +122,14 @@ pub struct EstimatePoseRequest {
     pub model_path: Option<PathBuf>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EstimateFrameRequest {
+    pub backend: String,
+    pub frame_data: Vec<u8>,
+    pub model_path: Option<PathBuf>,
+}
+
 #[derive(Debug, Serialize)]
 struct ProtocolRequest {
     id: u64,
@@ -135,6 +146,12 @@ enum ProtocolCommand {
     Estimate {
         backend: String,
         image_path: PathBuf,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        backend_config: Option<BackendConfig>,
+    },
+    EstimateFrame {
+        backend: String,
+        image_base64: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         backend_config: Option<BackendConfig>,
     },
@@ -238,6 +255,7 @@ pub struct PythonSidecarManager {
     diagnostics: Arc<Mutex<VecDeque<String>>>,
     short_timeout: Duration,
     estimate_timeout: Duration,
+    live_frame_timeout: Duration,
 }
 
 impl Default for PythonSidecarManager {
@@ -270,6 +288,7 @@ impl PythonSidecarManager {
             diagnostics: Arc::new(Mutex::new(VecDeque::new())),
             short_timeout,
             estimate_timeout,
+            live_frame_timeout: estimate_timeout.min(LIVE_FRAME_REQUEST_TIMEOUT),
         }
     }
 
@@ -298,6 +317,38 @@ impl PythonSidecarManager {
                 backend_config,
             },
             self.estimate_timeout,
+        )
+    }
+
+    pub fn estimate_frame(
+        &self,
+        request: EstimateFrameRequest,
+    ) -> Result<PoseResultDto, BridgeError> {
+        if request.frame_data.is_empty() {
+            return Err(BridgeError::new(
+                "invalid_frame_data",
+                "Frame data must not be empty",
+            ));
+        }
+
+        if request.frame_data.len() > MAX_FRAME_BYTES {
+            return Err(BridgeError::new(
+                "frame_too_large",
+                format!("Frame exceeds the {MAX_FRAME_BYTES}-byte limit"),
+            ));
+        }
+
+        let backend_config = request
+            .model_path
+            .map(|model_path| BackendConfig { model_path });
+
+        self.request(
+            ProtocolCommand::EstimateFrame {
+                backend: request.backend,
+                image_base64: BASE64_STANDARD.encode(request.frame_data),
+                backend_config,
+            },
+            self.live_frame_timeout,
         )
     }
 
@@ -732,7 +783,7 @@ for line in sys.stdin:
  r=json.loads(line); t=r['type']; rid=r['id']
  if t=='ping': result={'status':'ready','protocol_version':1}
  elif t=='get_backends': result={'available':['mediapipe','yolo'],'unavailable':['mmpose']}
- elif t=='estimate': result={'success':True,'backend':r['backend'],'people':[],'image_width':None,'image_height':None,'processing_time_ms':None}
+ elif t in ('estimate','estimate_frame'): result={'success':True,'backend':r['backend'],'people':[],'image_width':None,'image_height':None,'processing_time_ms':None}
  elif t=='shutdown': result={'status':'shutdown'}
  print(json.dumps({'id':rid,'ok':True,'result':result}),flush=True)
  if t=='shutdown': break"#
@@ -765,6 +816,15 @@ for line in sys.stdin:
             ProtocolRequest {
                 id: 4,
                 protocol_version: 1,
+                command: ProtocolCommand::EstimateFrame {
+                    backend: "mediapipe".into(),
+                    image_base64: "AQID".into(),
+                    backend_config: None,
+                },
+            },
+            ProtocolRequest {
+                id: 5,
+                protocol_version: 1,
                 command: ProtocolCommand::Shutdown,
             },
         ];
@@ -782,7 +842,9 @@ for line in sys.stdin:
             values[2]["backend_config"]["model_path"],
             r"C:\models\pose.pt"
         );
-        assert_eq!(values[3]["type"], "shutdown");
+        assert_eq!(values[3]["type"], "estimate_frame");
+        assert_eq!(values[3]["image_base64"], "AQID");
+        assert_eq!(values[4]["type"], "shutdown");
     }
 
     #[test]
@@ -909,6 +971,53 @@ for line in sys.stdin:
     }
 
     #[test]
+    fn frame_bridge_encodes_bytes_and_deserializes_pose_result() {
+        let manager = PythonSidecarManager::with_config(
+            helper_config(echo_script(), &[]),
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+        );
+        let result = manager
+            .estimate_frame(EstimateFrameRequest {
+                backend: "mediapipe".into(),
+                frame_data: vec![1, 2, 3],
+                model_path: None,
+            })
+            .unwrap();
+        assert!(result.success);
+        assert_eq!(result.backend, "mediapipe");
+        assert_eq!(manager.spawn_count(), 1);
+        manager.shutdown().unwrap();
+    }
+
+    #[test]
+    fn empty_and_oversized_frames_are_rejected_before_spawn() {
+        let manager = PythonSidecarManager::with_config(
+            helper_config(echo_script(), &[]),
+            Duration::from_secs(2),
+            Duration::from_secs(2),
+        );
+        let empty = manager
+            .estimate_frame(EstimateFrameRequest {
+                backend: "mediapipe".into(),
+                frame_data: vec![],
+                model_path: None,
+            })
+            .unwrap_err();
+        assert_eq!(empty.kind, "invalid_frame_data");
+
+        let large = manager
+            .estimate_frame(EstimateFrameRequest {
+                backend: "mediapipe".into(),
+                frame_data: vec![0; MAX_FRAME_BYTES + 1],
+                model_path: None,
+            })
+            .unwrap_err();
+        assert_eq!(large.kind, "frame_too_large");
+        assert_eq!(manager.spawn_count(), 0);
+    }
+
+    #[test]
     fn spawn_failure_is_typed() {
         let mut config = helper_config(echo_script(), &[]);
         config.executable = PathBuf::from("definitely-missing-python-executable");
@@ -977,6 +1086,38 @@ for line in sys.stdin:
         assert_eq!(manager.spawn_count(), 2);
         manager.shutdown().unwrap();
         let _ = fs::remove_file(marker);
+    }
+
+    #[test]
+    fn live_frame_timeout_kills_child_without_retry() {
+        let script = r#"import json,sys,time
+for line in sys.stdin:
+ r=json.loads(line); t=r['type']
+ if t=='estimate_frame': time.sleep(2); result={}
+ elif t=='ping': result={'status':'ready','protocol_version':1}
+ else: result={'status':'shutdown'}
+ print(json.dumps({'id':r['id'],'ok':True,'result':result}),flush=True)
+ if t=='shutdown': break"#;
+        let manager = PythonSidecarManager::with_config(
+            helper_config(script, &[]),
+            Duration::from_millis(500),
+            Duration::from_millis(200),
+        );
+
+        let error = manager
+            .estimate_frame(EstimateFrameRequest {
+                backend: "mediapipe".into(),
+                frame_data: vec![1],
+                model_path: None,
+            })
+            .unwrap_err();
+
+        assert_eq!(error.kind, "sidecar_timeout");
+        assert!(!manager.is_running());
+        assert_eq!(manager.spawn_count(), 1);
+        assert_eq!(manager.ping().unwrap().status, "ready");
+        assert_eq!(manager.spawn_count(), 2);
+        manager.shutdown().unwrap();
     }
 
     #[test]
@@ -1076,5 +1217,30 @@ for line in sys.stdin:
                 Self::terminate_process(&mut inner);
             }
         }
+    }
+
+    #[test]
+    fn real_python_frame_bridge_decodes_image_and_preserves_model_error() {
+        let manager = PythonSidecarManager::new();
+        let missing_model_path = temp_marker("missing-live-model.task");
+        let _ = fs::remove_file(&missing_model_path);
+        let bmp = vec![
+            0x42, 0x4d, 58, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0,
+            1, 0, 24, 0, 0, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 255, 0,
+        ];
+
+        let error = manager
+            .estimate_frame(EstimateFrameRequest {
+                backend: "mediapipe".into(),
+                frame_data: bmp,
+                model_path: Some(missing_model_path),
+            })
+            .unwrap_err();
+
+        assert_eq!(error.kind, "python_protocol_error");
+        assert_eq!(error.code.as_deref(), Some("model_asset_not_found"));
+        assert_eq!(manager.ping().unwrap().status, "ready");
+        manager.shutdown().unwrap();
     }
 }

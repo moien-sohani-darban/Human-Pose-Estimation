@@ -18,7 +18,7 @@ from ..models import (
 
 PROTOCOL_VERSION = 1
 SUPPORTED_COMMANDS = frozenset(
-    {"ping", "get_backends", "estimate", "shutdown"}
+    {"ping", "get_backends", "estimate", "estimate_frame", "shutdown"}
 )
 RequestId = str | int
 JsonObject = dict[str, Any]

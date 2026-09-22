@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   buildEstimateArguments,
+  buildEstimateFrameArguments,
   normalizeCommandError,
 } from "./protocol.js";
 
@@ -17,6 +18,23 @@ test("buildEstimateArguments matches the Task 08 command shape", () => {
         backend: "yolo",
         imagePath: String.raw`C:\Images\person.jpg`,
         modelPath: String.raw`C:\Models\pose.pt`,
+      },
+    },
+  );
+});
+
+test("buildEstimateFrameArguments carries bytes without browser base64", () => {
+  assert.deepEqual(
+    buildEstimateFrameArguments({
+      backend: "mediapipe",
+      frameData: new Uint8Array([255, 216, 255]),
+      modelPath: "",
+    }),
+    {
+      request: {
+        backend: "mediapipe",
+        frameData: [255, 216, 255],
+        modelPath: null,
       },
     },
   );
