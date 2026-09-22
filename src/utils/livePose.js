@@ -125,29 +125,33 @@ export function canvasToJpegBytes(
   });
 }
 
-export async function captureCameraFrame(
-  video,
+export async function captureMediaFrame(
+  media,
   canvas,
   context = null,
+  {
+    notReadyCode = "media_not_ready",
+    notReadyMessage = "The media is not ready to capture a frame.",
+  } = {},
 ) {
   if (
-    !video ||
+    !media ||
     !canvas ||
-    video.readyState < 2 ||
-    !Number.isFinite(video.videoWidth) ||
-    !Number.isFinite(video.videoHeight) ||
-    video.videoWidth <= 0 ||
-    video.videoHeight <= 0
+    media.readyState < 2 ||
+    !Number.isFinite(media.videoWidth) ||
+    !Number.isFinite(media.videoHeight) ||
+    media.videoWidth <= 0 ||
+    media.videoHeight <= 0
   ) {
     throw {
-      code: "camera_not_ready",
-      message: "The camera is not ready to capture a frame.",
+      code: notReadyCode,
+      message: notReadyMessage,
     };
   }
 
   const dimensions = computeInferenceDimensions(
-    video.videoWidth,
-    video.videoHeight,
+    media.videoWidth,
+    media.videoHeight,
   );
 
   if (canvas.width !== dimensions.width) {
@@ -164,12 +168,12 @@ export async function captureCameraFrame(
   if (!drawingContext) {
     throw {
       code: "frame_encode_failed",
-      message: "The camera capture canvas is unavailable.",
+      message: "The frame capture canvas is unavailable.",
     };
   }
 
   drawingContext.drawImage(
-    video,
+    media,
     0,
     0,
     dimensions.width,
@@ -180,6 +184,13 @@ export async function captureCameraFrame(
     context: drawingContext,
     frameData: await canvasToJpegBytes(canvas),
   };
+}
+
+export function captureCameraFrame(video, canvas, context = null) {
+  return captureMediaFrame(video, canvas, context, {
+    notReadyCode: "camera_not_ready",
+    notReadyMessage: "The camera is not ready to capture a frame.",
+  });
 }
 
 export function createLiveScheduler({

@@ -206,3 +206,63 @@ test("webcam workspace starts with camera and live inference off", async () => {
     await vite.close();
   }
 });
+
+test("application exposes Image, Webcam, and Video input modes", async () => {
+  const vite = await createServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+
+  try {
+    const { default: App } = await vite.ssrLoadModule("/src/App.jsx");
+    const markup = renderToStaticMarkup(React.createElement(App));
+
+    assert.match(markup, />Image</);
+    assert.match(markup, />Webcam</);
+    assert.match(markup, />Video</);
+    assert.match(markup, /Select an image to begin/);
+  } finally {
+    await vite.close();
+  }
+});
+
+test("video workspace uses native playback and explicit analysis controls", async () => {
+  const vite = await createServer({
+    server: { middlewareMode: true },
+    appType: "custom",
+  });
+
+  try {
+    const { default: VideoWorkspace } = await vite.ssrLoadModule(
+      "/src/components/VideoWorkspace.jsx",
+    );
+
+    const markup = renderToStaticMarkup(
+      React.createElement(VideoWorkspace, {
+        selectedVideo: {
+          path: String.raw`F:\Media\clip.mp4`,
+          name: "clip.mp4",
+          previewSource: "asset://clip.mp4",
+        },
+        selectedBackend: "mediapipe",
+        modelPath: "",
+        defaultModelPath: "",
+        overlayOptions: {
+          skeleton: true,
+          keypoints: true,
+          boxes: true,
+        },
+        onAnalysisChange() {},
+        onChooseVideo() {},
+      }),
+    );
+
+    assert.match(markup, /<video[^>]*controls=""/);
+    assert.match(markup, /Video loading/);
+    assert.match(markup, /Start Analysis/);
+    assert.match(markup, /Choose another video/);
+    assert.doesNotMatch(markup, /pose-overlay/);
+  } finally {
+    await vite.close();
+  }
+});

@@ -5,6 +5,7 @@ import {
   buildEstimateFrameArguments,
   normalizeCommandError,
 } from "./protocol.js";
+import { selectVideoFile, VIDEO_FILTER } from "./pose.js";
 
 test("buildEstimateArguments matches the Task 08 command shape", () => {
   assert.deepEqual(
@@ -95,4 +96,19 @@ test("unmapped typed errors never expose backend diagnostics", () => {
         "Something unexpected happened. Check your input and try again.",
     },
   );
+});
+
+test("video picker uses conservative WebView formats and cancellation is normal", async () => {
+  let options;
+
+  const selected = await selectVideoFile(async (received) => {
+    options = received;
+    return null;
+  });
+
+  assert.equal(selected, null);
+  assert.deepEqual(options.filters, [VIDEO_FILTER]);
+  assert.deepEqual(VIDEO_FILTER.extensions, ["mp4", "webm", "mov", "m4v"]);
+  assert.equal(options.multiple, false);
+  assert.equal(options.directory, false);
 });

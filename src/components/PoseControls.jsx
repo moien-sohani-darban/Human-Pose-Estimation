@@ -27,7 +27,7 @@ export default function PoseControls({
 }) {
   const isProcessing = estimateStatus === "processing";
   const controlsLocked = isProcessing || liveLocked;
-  const imageMode = inputMode !== "webcam";
+  const imageMode = inputMode === "image";
 
   const canEstimate = Boolean(
     imageMode &&

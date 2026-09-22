@@ -11,6 +11,11 @@ const IMAGE_FILTER = {
   extensions: ["png", "jpg", "jpeg", "bmp", "webp"],
 };
 
+export const VIDEO_FILTER = {
+  name: "Videos",
+  extensions: ["mp4", "webm", "mov", "m4v"],
+};
+
 const MODEL_FILTERS = {
   mediapipe: { name: "MediaPipe model", extensions: ["task"] },
   yolo: { name: "YOLO Pose model", extensions: ["pt"] },
@@ -53,6 +58,19 @@ export async function selectImageFile() {
       multiple: false,
       directory: false,
       filters: [IMAGE_FILTER],
+    });
+  } catch (error) {
+    throw normalizeCommandError(error);
+  }
+}
+
+export async function selectVideoFile(dialog = open) {
+  try {
+    return await dialog({
+      title: "Select a video",
+      multiple: false,
+      directory: false,
+      filters: [VIDEO_FILTER],
     });
   } catch (error) {
     throw normalizeCommandError(error);

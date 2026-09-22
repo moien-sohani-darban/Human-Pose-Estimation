@@ -4,12 +4,15 @@ import {
   estimatePose,
   getBackends,
   selectImageFile,
+  selectVideoFile,
   selectModelFile,
 } from "./api/pose";
 import ImageWorkspace from "./components/ImageWorkspace";
 import PoseControls from "./components/PoseControls";
 import ResultSummary from "./components/ResultSummary";
 import WebcamWorkspace from "./components/WebcamWorkspace";
+import VideoWorkspace from "./components/VideoWorkspace";
+import { createVideoSelection } from "./utils/videoPose";
 import {
   fileNameFromPath,
   getDefaultModelDisplayPath,
@@ -32,6 +35,7 @@ function App() {
   const [backendState, setBackendState] = useState(initialBackendState);
   const [selectedBackend, setSelectedBackend] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
+  const [selectedVideo, setSelectedVideo] = useState(null);
   const [inputMode, setInputMode] = useState("image");
   const [liveLocked, setLiveLocked] = useState(false);
   const [webcamPresentation, setWebcamPresentation] = useState({
@@ -40,7 +44,22 @@ function App() {
     result: null,
     inferenceFps: null,
   });
+  const [videoPresentation, setVideoPresentation] = useState({
+    analysisEnabled: false,
+    mediaStatus: "idle",
+    result: null,
+    inferenceFps: null,
+    metadata: {
+      duration: 0,
+      width: 0,
+      height: 0,
+      currentTime: 0,
+    },
+    mediaError: null,
+    analysisError: null,
+  });
   const webcamRef = useRef(null);
+  const videoRef = useRef(null);
   const [modelPaths, setModelPaths] = useState({
     mediapipe: "",
     yolo: "",
@@ -129,6 +148,27 @@ function App() {
     }
   }
 
+  async function chooseVideo() {
+    if (liveLocked) return;
+
+    setInteractionError(null);
+
+    try {
+      const path = await selectVideoFile();
+      if (!path) return;
+
+      setSelectedVideo((current) =>
+        createVideoSelection(
+          current,
+          path,
+          createPreviewSource,
+        ),
+      );
+    } catch (error) {
+      setInteractionError(error);
+    }
+  }
+
   async function chooseModel() {
     if (
       !selectedBackend ||
@@ -172,6 +212,10 @@ function App() {
 
     if (inputMode === "webcam") {
       webcamRef.current?.stopCamera();
+    }
+
+    if (inputMode === "video") {
+      videoRef.current?.stopAnalysis();
     }
 
     setLiveLocked(false);
@@ -240,7 +284,7 @@ function App() {
       <header className="app-header">
         <div>
           <h1>Human Pose Estimation</h1>
-          <p>Local image and webcam pose analysis with MediaPipe and YOLO Pose</p>
+          <p>Local image, webcam, and video pose analysis with MediaPipe and YOLO Pose</p>
         </div>
 
         <span
@@ -312,6 +356,15 @@ function App() {
             >
               Webcam
             </button>
+
+            <button
+              type="button"
+              className={inputMode === "video" ? "active" : ""}
+              onClick={() => changeInputMode("video")}
+              disabled={liveLocked}
+            >
+              Video
+            </button>
           </div>
 
           {inputMode === "image" ? (
@@ -323,7 +376,7 @@ function App() {
               overlayOptions={overlayOptions}
               onChooseImage={chooseImage}
             />
-          ) : (
+          ) : inputMode === "webcam" ? (
             <WebcamWorkspace
               ref={webcamRef}
               selectedBackend={selectedBackend}
@@ -332,6 +385,18 @@ function App() {
               overlayOptions={overlayOptions}
               onLiveChange={setLiveLocked}
               onPresentationChange={setWebcamPresentation}
+            />
+          ) : (
+            <VideoWorkspace
+              ref={videoRef}
+              selectedVideo={selectedVideo}
+              selectedBackend={selectedBackend}
+              modelPath={modelPaths[selectedBackend] ?? ""}
+              defaultModelPath={selectedDefaultModelPath}
+              overlayOptions={overlayOptions}
+              onAnalysisChange={setLiveLocked}
+              onPresentationChange={setVideoPresentation}
+              onChooseVideo={chooseVideo}
             />
           )}
 
@@ -383,7 +448,9 @@ function App() {
             result={
               inputMode === "webcam"
                 ? webcamPresentation.result
-                : poseResult
+                : inputMode === "video"
+                  ? videoPresentation.result
+                  : poseResult
             }
           />
         </div>
