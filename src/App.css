@@ -758,3 +758,18 @@ input:focus-visible {
   flex-wrap: wrap;
   margin-top: 12px;
 }
+
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: #71829c;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 600px) {
+  .app-footer {
+    flex-direction: column;
+  }
+}

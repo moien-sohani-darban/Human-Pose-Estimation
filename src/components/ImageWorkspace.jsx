@@ -25,7 +25,7 @@ export default function ImageWorkspace({
       <section className="workspace">
         <div className="empty-stage">
           <div className="empty-icon" aria-hidden="true">◇</div>
-          <h2>Select an image to begin</h2>
+          <h2>Choose an image to begin</h2>
           <p>Choose a local image and run pose estimation.</p>
 
           <button

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import packageMetadata from "../package.json";
 import {
   createPreviewSource,
   estimatePose,
@@ -455,6 +456,11 @@ function App() {
           />
         </div>
       </div>
+
+      <footer className="app-footer">
+        <span>Human Pose Estimation v{packageMetadata.version}</span>
+        <span>Local processing | MediaPipe + YOLO Pose</span>
+      </footer>
     </main>
   );
 }

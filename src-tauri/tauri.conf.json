@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "human-pose-estimation",
+  "productName": "Human Pose Estimation",
   "version": "0.1.0",
   "identifier": "com.moien.humanposeestimation",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "human-pose-estimation",
-        "width": 800,
-        "height": 600
+        "title": "Human Pose Estimation",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 1100,
+        "minHeight": 700
       }
     ],
     "security": {

@@ -155,7 +155,7 @@ export function getModelStatus(metadata, customPath) {
       kind: "missing",
       label: "Default model missing",
       guidance:
-        "Select a compatible local model with Browse. The expected default is shown below.",
+        "Select a compatible local model with Browse. The logical default path is shown below; installed builds may not include model weights.",
     };
   }
 

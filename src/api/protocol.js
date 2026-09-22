@@ -9,6 +9,8 @@ const ERROR_MESSAGES = {
     "Pose estimation took too long, so the local engine was reset. Try again.",
   sidecar_spawn_failed:
     "The local pose engine could not start. Restart the application and try again.",
+  sidecar_runtime_missing:
+    "The packaged pose engine is unavailable. Reinstall the application and try again.",
   sidecar_not_running:
     "The local pose engine stopped unexpectedly. Restart the application and try again.",
   sidecar_exited:
@@ -40,13 +42,13 @@ const ERROR_MESSAGES = {
   backend_inference_failed:
     "The pose backend could not process this input. Check the input and model, then try again.",
   invalid_frame_data:
-    "The captured camera frame was invalid. Stop and restart live estimation, then try again.",
+    "The captured media frame was invalid. Stop and restart pose analysis, then try again.",
   frame_decode_failed:
-    "The captured camera frame could not be decoded. Stop and restart live estimation.",
+    "The captured media frame could not be decoded. Stop and restart pose analysis.",
   frame_encode_failed:
-    "The camera frame could not be prepared. Stop and restart live estimation.",
+    "The media frame could not be prepared. Stop and restart pose analysis.",
   frame_too_large:
-    "The captured camera frame was too large to process safely. Reduce the camera resolution and try again.",
+    "The captured media frame was too large to process safely. Reduce the input resolution and try again.",
   internal_error:
     "The local pose engine encountered an unexpected problem. Restart the application and try again.",
 };

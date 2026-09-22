@@ -220,7 +220,7 @@ test("application exposes Image, Webcam, and Video input modes", async () => {
     assert.match(markup, />Image</);
     assert.match(markup, />Webcam</);
     assert.match(markup, />Video</);
-    assert.match(markup, /Select an image to begin/);
+    assert.match(markup, /Choose an image to begin/);
   } finally {
     await vite.close();
   }

@@ -54,6 +54,20 @@ test("empty model paths become null without changing the image path", () => {
   assert.equal(payload.request.modelPath, null);
 });
 
+test("packaged runtime errors become actionable without exposing paths", () => {
+  assert.deepEqual(
+    normalizeCommandError({
+      code: "sidecar_runtime_missing",
+      message: String.raw`C:\Users\developer\internal\python-sidecar.exe`,
+    }),
+    {
+      code: "sidecar_runtime_missing",
+      message:
+        "The packaged pose engine is unavailable. Reinstall the application and try again.",
+    },
+  );
+});
+
 test("structured bridge errors preserve codes and become actionable", () => {
   assert.deepEqual(
     normalizeCommandError({
