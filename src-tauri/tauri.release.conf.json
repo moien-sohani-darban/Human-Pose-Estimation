@@ -1,0 +1,8 @@
+{
+  "bundle": {
+    "targets": ["nsis"],
+    "resources": {
+      "../python-engine/dist/hpe-python-sidecar/": "python-sidecar/"
+    }
+  }
+}

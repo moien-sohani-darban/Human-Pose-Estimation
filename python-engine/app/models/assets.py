@@ -6,8 +6,10 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Final
 
+from ..runtime import get_runtime_resource_root
 
-ENGINE_ROOT: Path = Path(__file__).resolve().parents[2]
+
+ENGINE_ROOT: Path = get_runtime_resource_root()
 
 
 @dataclass(frozen=True, slots=True)

@@ -16,6 +16,8 @@ use std::{
 
 const PROTOCOL_VERSION: u8 = 1;
 const DIAGNOSTIC_LIMIT: usize = 32;
+const PACKAGED_SIDECAR_DIRECTORY: &str = "python-sidecar";
+const PACKAGED_SIDECAR_EXECUTABLE: &str = "hpe-python-sidecar.exe";
 pub const SHORT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 pub const ESTIMATE_REQUEST_TIMEOUT: Duration = Duration::from_secs(120);
 pub const LIVE_FRAME_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
@@ -192,6 +194,27 @@ impl LaunchConfig {
         )
     }
 
+    fn production(resource_directory: &Path) -> Result<Self, BridgeError> {
+        let working_directory = resource_directory.join(PACKAGED_SIDECAR_DIRECTORY);
+        let executable = working_directory.join(PACKAGED_SIDECAR_EXECUTABLE);
+
+        if !executable.is_file() {
+            return Err(BridgeError::new(
+                "sidecar_runtime_missing",
+                format!(
+                    "Bundled Python sidecar is missing at {}. Rebuild the Windows package; production does not fall back to system Python.",
+                    executable.display()
+                ),
+            ));
+        }
+
+        Ok(Self {
+            executable,
+            working_directory,
+            arguments: Vec::new(),
+        })
+    }
+
     fn from_sources(executable: Option<OsString>, engine_dir: Option<OsString>) -> Self {
         let crate_directory = Path::new(env!("CARGO_MANIFEST_DIR"));
         let default_engine_dir = crate_directory.join("..").join("python-engine");
@@ -271,6 +294,14 @@ impl PythonSidecarManager {
             SHORT_REQUEST_TIMEOUT,
             ESTIMATE_REQUEST_TIMEOUT,
         )
+    }
+
+    pub fn from_packaged_resource_dir(resource_directory: &Path) -> Result<Self, BridgeError> {
+        Ok(Self::with_config(
+            LaunchConfig::production(resource_directory)?,
+            SHORT_REQUEST_TIMEOUT,
+            ESTIMATE_REQUEST_TIMEOUT,
+        ))
     }
 
     fn with_config(
@@ -777,6 +808,38 @@ mod tests {
         assert_eq!(config.arguments, ["-m", "app.main"]);
     }
 
+    #[test]
+    fn production_launch_uses_only_the_bundled_runtime_even_with_spaces() {
+        let resource_directory = temp_marker("installed resources with spaces");
+        let sidecar_directory = resource_directory.join(PACKAGED_SIDECAR_DIRECTORY);
+
+        fs::create_dir_all(&sidecar_directory).unwrap();
+
+        let executable = sidecar_directory.join(PACKAGED_SIDECAR_EXECUTABLE);
+
+        fs::write(&executable, b"test marker").unwrap();
+
+        let config = LaunchConfig::production(&resource_directory).unwrap();
+
+        assert_eq!(config.executable, executable);
+        assert_eq!(config.working_directory, sidecar_directory);
+        assert!(config.arguments.is_empty());
+
+        fs::remove_dir_all(resource_directory).unwrap();
+    }
+
+    #[test]
+    fn missing_production_runtime_is_typed_and_never_falls_back() {
+        let resource_directory = temp_marker("missing-production-runtime");
+
+        let error = LaunchConfig::production(&resource_directory).unwrap_err();
+
+        assert_eq!(error.kind, "sidecar_runtime_missing");
+        assert!(error
+            .message
+            .contains("does not fall back to system Python"));
+    }
+
     fn echo_script() -> &'static str {
         r#"import json,sys
 for line in sys.stdin:
@@ -1209,6 +1272,42 @@ for line in sys.stdin:
         assert_eq!(error.code.as_deref(), Some("model_asset_not_found"));
         assert_eq!(manager.ping().unwrap().status, "ready");
         manager.shutdown().unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires scripts/build-python-sidecar.ps1"]
+    fn packaged_python_bridge_ping_backends_and_shutdown() {
+        let package_directory = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("python-engine")
+            .join("dist")
+            .join("hpe-python-sidecar");
+
+        let executable = package_directory.join(PACKAGED_SIDECAR_EXECUTABLE);
+
+        assert!(
+            executable.is_file(),
+            "build the packaged sidecar before running this integration test"
+        );
+
+        let manager = PythonSidecarManager::with_config(
+            LaunchConfig {
+                executable,
+                working_directory: package_directory,
+                arguments: Vec::new(),
+            },
+            Duration::from_secs(30),
+            ESTIMATE_REQUEST_TIMEOUT,
+        );
+
+        assert_eq!(manager.ping().unwrap().protocol_version, 1);
+
+        let backends = manager.get_backends().unwrap();
+        assert_eq!(backends.available, ["mediapipe", "yolo"]);
+        assert_eq!(backends.unavailable, ["mmpose"]);
+
+        manager.shutdown().unwrap();
+        assert!(!manager.is_running());
     }
 
     impl PythonSidecarManager {

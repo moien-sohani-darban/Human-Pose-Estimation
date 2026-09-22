@@ -68,7 +68,13 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            app.manage(PythonSidecarManager::new());
+            let manager = if cfg!(debug_assertions) {
+                PythonSidecarManager::new()
+            } else {
+                let resource_directory = app.path().resource_dir()?;
+                PythonSidecarManager::from_packaged_resource_dir(&resource_directory)?
+            };
+            app.manage(manager);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

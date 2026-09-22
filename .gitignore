@@ -26,6 +26,8 @@ dist-ssr/
 # ==========================================
 
 src-tauri/target/
+python-engine/build/pyinstaller/
+python-engine/dist/
 
 
 # ==========================================
@@ -48,6 +50,8 @@ ENV/
 *.egg-info/
 build/
 *.whl
+python-engine/*-stdout.txt
+python-engine/*-stderr.txt
 
 
 # ==========================================
