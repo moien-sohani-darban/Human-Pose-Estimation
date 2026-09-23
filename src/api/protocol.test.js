@@ -43,29 +43,13 @@ test("buildEstimateFrameArguments carries bytes without browser base64", () => {
 
 test("empty model paths become null without changing the image path", () => {
   const imagePath = String.raw`F:\People\subject one.png`;
-
   const payload = buildEstimateArguments({
     backend: "mediapipe",
     imagePath,
     modelPath: "  ",
   });
-
   assert.equal(payload.request.imagePath, imagePath);
   assert.equal(payload.request.modelPath, null);
-});
-
-test("packaged runtime errors become actionable without exposing paths", () => {
-  assert.deepEqual(
-    normalizeCommandError({
-      code: "sidecar_runtime_missing",
-      message: String.raw`C:\Users\developer\internal\python-sidecar.exe`,
-    }),
-    {
-      code: "sidecar_runtime_missing",
-      message:
-        "The packaged pose engine is unavailable. Reinstall the application and try again.",
-    },
-  );
 });
 
 test("structured bridge errors preserve codes and become actionable", () => {
@@ -83,6 +67,15 @@ test("structured bridge errors preserve codes and become actionable", () => {
   );
 });
 
+test("missing production runtime has an actionable packaging message", () => {
+  const normalized = normalizeCommandError({
+    kind: "sidecar_runtime_missing",
+    message: "developer detail",
+  });
+  assert.equal(normalized.code, "sidecar_runtime_missing");
+  assert.match(normalized.message, /bundled pose engine is missing/i);
+});
+
 test("serialized and unsafe unknown errors are normalized safely", () => {
   assert.equal(
     normalizeCommandError(
@@ -90,11 +83,9 @@ test("serialized and unsafe unknown errors are normalized safely", () => {
     ).code,
     "sidecar_timeout",
   );
-
   assert.deepEqual(normalizeCommandError("Traceback\nsecret path"), {
     code: "unexpected_error",
-    message:
-      "Something unexpected happened. Check your input and try again.",
+    message: "Something unexpected happened. Check your input and try again.",
   });
 });
 
@@ -106,15 +97,13 @@ test("unmapped typed errors never expose backend diagnostics", () => {
     }),
     {
       code: "future_internal_failure",
-      message:
-        "Something unexpected happened. Check your input and try again.",
+      message: "Something unexpected happened. Check your input and try again.",
     },
   );
 });
 
 test("video picker uses conservative WebView formats and cancellation is normal", async () => {
   let options;
-
   const selected = await selectVideoFile(async (received) => {
     options = received;
     return null;

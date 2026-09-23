@@ -79,7 +79,9 @@ export async function selectVideoFile(dialog = open) {
 
 export async function selectModelFile(backend) {
   const filter = MODEL_FILTERS[backend];
-  if (!filter) return null;
+  if (!filter) {
+    return null;
+  }
 
   try {
     return await open({

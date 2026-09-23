@@ -10,7 +10,7 @@ const ERROR_MESSAGES = {
   sidecar_spawn_failed:
     "The local pose engine could not start. Restart the application and try again.",
   sidecar_runtime_missing:
-    "The packaged pose engine is unavailable. Reinstall the application and try again.",
+    "The bundled pose engine is missing. Reinstall the application and try again.",
   sidecar_not_running:
     "The local pose engine stopped unexpectedly. Restart the application and try again.",
   sidecar_exited:
@@ -48,7 +48,7 @@ const ERROR_MESSAGES = {
   frame_encode_failed:
     "The media frame could not be prepared. Stop and restart pose analysis.",
   frame_too_large:
-    "The captured media frame was too large to process safely. Reduce the input resolution and try again.",
+    "The captured media frame was too large to process safely. Reduce the source resolution and try again.",
   internal_error:
     "The local pose engine encountered an unexpected problem. Restart the application and try again.",
 };

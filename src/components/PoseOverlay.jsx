@@ -3,7 +3,7 @@ import { buildRenderablePeople } from "../utils/pose";
 const percent = (value) => `${value * 100}%`;
 const LIMB_COLORS = ["#7c55ff", "#22d3ee", "#34d399", "#fbbf24", "#fb7185", "#a78bfa"];
 
-export default function PoseOverlay({
+const PoseOverlay = ({
   result,
   showSkeleton,
   showKeypoints,
@@ -11,7 +11,7 @@ export default function PoseOverlay({
   skeletonStyle = "multi",
   lineThickness = 2,
   keypointSize = 7,
-}) {
+}) => {
   const people = buildRenderablePeople(result);
 
   return (
@@ -80,4 +80,6 @@ export default function PoseOverlay({
       ))}
     </svg>
   );
-}
+};
+
+export default PoseOverlay;

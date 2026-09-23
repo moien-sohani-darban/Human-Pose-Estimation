@@ -1,19 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import packageMetadata from "../package.json";
 import {
   createPreviewSource,
   estimatePose,
   getBackends,
   selectImageFile,
-  selectVideoFile,
   selectModelFile,
+  selectVideoFile,
 } from "./api/pose";
+import Icon from "./components/Icon";
 import ImageWorkspace from "./components/ImageWorkspace";
-import PoseControls from "./components/PoseControls";
-import ResultSummary from "./components/ResultSummary";
+import InspectorPanel from "./components/InspectorPanel";
+import NavigationSidebar from "./components/NavigationSidebar";
+import SettingsModal from "./components/SettingsModal";
 import WebcamWorkspace from "./components/WebcamWorkspace";
 import VideoWorkspace from "./components/VideoWorkspace";
-import { createVideoSelection } from "./utils/videoPose";
 import {
   fileNameFromPath,
   getDefaultModelDisplayPath,
@@ -22,14 +22,20 @@ import {
   validatePoseResult,
   withModelSetupGuidance,
 } from "./utils/pose";
-import "./App.css";
+import { createVideoSelection } from "./utils/videoPose";
+import {
+  persistAppearance,
+  readAppearancePreference,
+  resolveTheme,
+} from "./utils/theme";
+import "./App.scss";
 
-const initialBackendState = {
-  status: "loading",
-  available: [],
-  unavailable: [],
-  models: {},
-  error: null,
+import HPEImage from "./assets/images/HPE-Logo.png";
+
+const initialBackendState = { status: "loading", available: [], unavailable: [], models: {}, error: null };
+const initialRuntime = {
+  webcam: { cameraStatus: "idle", liveStatus: "idle", result: null, inferenceFps: null },
+  video: { analysisEnabled: false, mediaStatus: "idle", result: null, inferenceFps: null },
 };
 
 function App() {
@@ -37,34 +43,7 @@ function App() {
   const [selectedBackend, setSelectedBackend] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [selectedVideo, setSelectedVideo] = useState(null);
-  const [inputMode, setInputMode] = useState("image");
-  const [liveLocked, setLiveLocked] = useState(false);
-  const [webcamPresentation, setWebcamPresentation] = useState({
-    cameraStatus: "idle",
-    liveStatus: "idle",
-    result: null,
-    inferenceFps: null,
-  });
-  const [videoPresentation, setVideoPresentation] = useState({
-    analysisEnabled: false,
-    mediaStatus: "idle",
-    result: null,
-    inferenceFps: null,
-    metadata: {
-      duration: 0,
-      width: 0,
-      height: 0,
-      currentTime: 0,
-    },
-    mediaError: null,
-    analysisError: null,
-  });
-  const webcamRef = useRef(null);
-  const videoRef = useRef(null);
-  const [modelPaths, setModelPaths] = useState({
-    mediapipe: "",
-    yolo: "",
-  });
+  const [modelPaths, setModelPaths] = useState({ mediapipe: "", yolo: "" });
   const [estimateStatus, setEstimateStatus] = useState("idle");
   const [poseResult, setPoseResult] = useState(null);
   const [estimateError, setEstimateError] = useState(null);
@@ -73,300 +52,206 @@ function App() {
     skeleton: true,
     keypoints: true,
     boxes: true,
+    skeletonStyle: "single",
+    lineThickness: 2,
+    keypointSize: 6,
   });
+  const [inputMode, setInputMode] = useState("image");
+  const [liveLocked, setLiveLocked] = useState(false);
+  const [runtime, setRuntime] = useState(initialRuntime);
+  const [compactInspectorOpen, setCompactInspectorOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [appearance, setAppearance] = useState(() => readAppearancePreference(globalThis.localStorage));
+  const [systemDark, setSystemDark] = useState(() => globalThis.matchMedia?.("(prefers-color-scheme: dark)").matches ?? true);
+  const webcamRef = useRef(null);
+  const videoRef = useRef(null);
+  const settingsTriggerRef = useRef(null);
+
+  const selectedDefaultModelPath = getDefaultModelDisplayPath(backendState.models?.[selectedBackend]);
 
   const loadBackends = useCallback(async () => {
-    setBackendState((current) => ({
-      ...current,
-      status: "loading",
-      error: null,
-    }));
-
+    setBackendState((current) => ({ ...current, status: "loading", error: null }));
     try {
       const response = await getBackends();
-
-      if (
-        !Array.isArray(response?.available) ||
-        !Array.isArray(response?.unavailable)
-      ) {
-        throw {
-          code: "unexpected_result",
-          message: "The pose engine returned an unexpected backend list.",
-        };
+      if (!Array.isArray(response?.available) || !Array.isArray(response?.unavailable)) {
+        throw { code: "unexpected_result", message: "The pose engine returned an unexpected backend list." };
       }
-
-      setBackendState({
-        status: "ready",
-        available: response.available,
-        unavailable: response.unavailable,
-        models: normalizeModelMetadata(response.models),
-        error: null,
-      });
-
-      setSelectedBackend((current) =>
-        response.available.includes(current)
-          ? current
-          : response.available.includes("mediapipe")
-            ? "mediapipe"
-            : response.available[0] ?? "",
-      );
+      setBackendState({ status: "ready", available: response.available, unavailable: response.unavailable, models: normalizeModelMetadata(response.models), error: null });
+      setSelectedBackend((current) => response.available.includes(current) ? current : response.available.includes("mediapipe") ? "mediapipe" : response.available[0] ?? "");
     } catch (error) {
       setSelectedBackend("");
-      setBackendState({
-        status: "error",
-        available: [],
-        unavailable: [],
-        models: {},
-        error,
-      });
+      setBackendState({ status: "error", available: [], unavailable: [], models: {}, error });
     }
   }, []);
 
+  useEffect(() => { loadBackends(); }, [loadBackends]);
+
   useEffect(() => {
-    loadBackends();
-  }, [loadBackends]);
+    const media = globalThis.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) return undefined;
+    const update = (event) => setSystemDark(event.matches);
+    media.addEventListener?.("change", update);
+    return () => media.removeEventListener?.("change", update);
+  }, []);
+
+  useEffect(() => {
+    globalThis.document?.documentElement?.setAttribute("data-theme", resolveTheme(appearance, systemDark));
+    persistAppearance(globalThis.localStorage, appearance);
+  }, [appearance, systemDark]);
+
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    globalThis.setTimeout?.(() => settingsTriggerRef.current?.focus(), 0);
+  }, []);
+  const handleWebcamPresentation = useCallback((next) => {
+    setRuntime((current) => ({ ...current, webcam: next }));
+  }, []);
+  const handleVideoPresentation = useCallback((next) => {
+    setRuntime((current) => ({ ...current, video: next }));
+  }, []);
 
   async function chooseImage() {
     if (estimateStatus === "processing") return;
-
     setInteractionError(null);
-
     try {
       const path = await selectImageFile();
       if (!path) return;
-
-      setSelectedImage({
-        path,
-        name: fileNameFromPath(path),
-        previewSource: createPreviewSource(path),
-      });
-
+      setSelectedImage({ path, name: fileNameFromPath(path), previewSource: createPreviewSource(path) });
       setPoseResult(null);
       setEstimateError(null);
       setEstimateStatus("ready");
-    } catch (error) {
-      setInteractionError(error);
-    }
+    } catch (error) { setInteractionError(error); }
+  }
+
+  async function chooseModel() {
+    if (!selectedBackend || liveLocked) return;
+    setInteractionError(null);
+    try {
+      const path = await selectModelFile(selectedBackend);
+      if (path) setModelPaths((current) => setBackendModelPath(current, selectedBackend, path));
+    } catch (error) { setInteractionError(error); }
   }
 
   async function chooseVideo() {
     if (liveLocked) return;
-
     setInteractionError(null);
-
     try {
       const path = await selectVideoFile();
-      if (!path) return;
-
-      setSelectedVideo((current) =>
-        createVideoSelection(
-          current,
-          path,
-          createPreviewSource,
-        ),
-      );
-    } catch (error) {
-      setInteractionError(error);
-    }
-  }
-
-  async function chooseModel() {
-    if (
-      !selectedBackend ||
-      estimateStatus === "processing" ||
-      liveLocked
-    ) {
-      return;
-    }
-
-    setInteractionError(null);
-
-    try {
-      const path = await selectModelFile(selectedBackend);
-      if (!path) return;
-
-      setModelPaths((current) =>
-        setBackendModelPath(current, selectedBackend, path),
-      );
-    } catch (error) {
-      setInteractionError(error);
-    }
+      if (path) setSelectedVideo((current) => createVideoSelection(current, path, createPreviewSource));
+    } catch (error) { setInteractionError(error); }
   }
 
   function changeBackend(backend) {
-    if (
-      estimateStatus === "processing" ||
-      liveLocked ||
-      !backendState.available.includes(backend)
-    ) {
-      return;
-    }
-
+    if (estimateStatus === "processing" || liveLocked || !backendState.available.includes(backend)) return;
     setSelectedBackend(backend);
     setPoseResult(null);
     setEstimateError(null);
     setEstimateStatus(selectedImage ? "ready" : "idle");
   }
 
-  function changeInputMode(nextMode) {
-    if (nextMode === inputMode) return;
-
-    if (inputMode === "webcam") {
-      webcamRef.current?.stopCamera();
-    }
-
-    if (inputMode === "video") {
-      videoRef.current?.stopAnalysis();
-    }
-
-    setLiveLocked(false);
-    setInputMode(nextMode);
-  }
-
-  function clearImage() {
-    if (estimateStatus === "processing") return;
-
-    setSelectedImage(null);
-    setPoseResult(null);
-    setEstimateError(null);
-    setInteractionError(null);
-    setEstimateStatus("idle");
-  }
-
-  const selectedDefaultModelPath = getDefaultModelDisplayPath(
-    backendState.models?.[selectedBackend],
-  );
-
   async function runEstimate() {
-    if (
-      !selectedImage ||
-      !selectedBackend ||
-      estimateStatus === "processing"
-    ) {
-      return;
-    }
-
+    if (!selectedImage || !selectedBackend || estimateStatus === "processing") return;
     setPoseResult(null);
     setEstimateError(null);
     setInteractionError(null);
     setEstimateStatus("processing");
-
     try {
-      const result = await estimatePose({
-        backend: selectedBackend,
-        imagePath: selectedImage.path,
-        modelPath: modelPaths[selectedBackend] ?? "",
-      });
-
-      if (!validatePoseResult(result)) {
-        throw {
-          code: "unexpected_result",
-          message: "The pose engine returned an unexpected result.",
-        };
-      }
-
+      const result = await estimatePose({ backend: selectedBackend, imagePath: selectedImage.path, modelPath: modelPaths[selectedBackend] ?? "" });
+      if (!validatePoseResult(result)) throw { code: "unexpected_result", message: "The pose engine returned an unexpected result." };
       setPoseResult(result);
       setEstimateStatus("success");
     } catch (error) {
       setPoseResult(null);
-      setEstimateError(
-        withModelSetupGuidance(
-          error,
-          selectedBackend,
-          selectedDefaultModelPath,
-        ),
-      );
+      setEstimateError(withModelSetupGuidance(error, selectedBackend, selectedDefaultModelPath));
       setEstimateStatus("error");
     }
   }
 
+  function changeMode(nextMode) {
+    if (nextMode === inputMode) return;
+    if (inputMode === "webcam") webcamRef.current?.stopCamera();
+    if (inputMode === "video") videoRef.current?.stopAnalysis();
+    setLiveLocked(false);
+    setCompactInspectorOpen(false);
+    setInputMode(nextMode);
+  }
+
+  function handleInspectorAction(kind, key, value) {
+    if (kind === "overlay") {
+      setOverlayOptions((current) => ({ ...current, [key]: value }));
+      return;
+    }
+    if (inputMode === "webcam") {
+      if (runtime.webcam.liveStatus === "running") webcamRef.current?.stopLive();
+      else webcamRef.current?.startLive();
+    } else if (inputMode === "video") {
+      if (runtime.video.analysisEnabled) videoRef.current?.stopAnalysis();
+      else videoRef.current?.startAnalysis();
+    }
+  }
+
+  function focusModelSetup() {
+    setCompactInspectorOpen(true);
+    globalThis.setTimeout?.(() => globalThis.document?.getElementById("model-setup")?.focus(), 0);
+  }
+
+  const activeRuntime = runtime[inputMode] ?? null;
+  const activeResult = inputMode === "image" ? poseResult : activeRuntime?.result ?? null;
+  const activeFps = inputMode === "image" && Number.isFinite(poseResult?.processing_time_ms) && poseResult.processing_time_ms > 0
+    ? 1000 / poseResult.processing_time_ms
+    : activeRuntime?.inferenceFps ?? null;
+
   return (
-    <main className="app-shell">
+    <div className="app-shell">
       <header className="app-header">
-        <div>
-          <h1>Human Pose Estimation</h1>
-          <p>Local image, webcam, and video pose analysis with MediaPipe and YOLO Pose</p>
+        <div className="brand-lockup">
+          <div className="brand-logo">
+            <img className="brand-image" src={HPEImage} alt="Logo" />
+          </div>
+
+          <div className="brand-contents">
+            <span className="brand-title">Human Pose Estimation</span>
+            <p className="brand-subtitle">Local pose analysis for images, videos and webcam</p>
+          </div>
         </div>
 
-        <span
-          className={`engine-status engine-${backendState.status}`}
-          role="status"
+        <button
+          className="header-inspector-toggle"
+          type="button"
+          aria-label="Toggle inspector"
+          aria-controls="inspector-panel"
+          aria-expanded={compactInspectorOpen}
+          onClick={() => setCompactInspectorOpen((current) => !current)}
         >
-          {backendState.status === "loading"
-            ? "Connecting…"
-            : backendState.status === "ready"
-              ? "Engine ready"
-              : "Engine unavailable"}
-        </span>
+          <Icon name="preferences" />
+        </button>
       </header>
 
-      {interactionError && (
-        <div className="global-error" role="alert">
-          <span>{interactionError.message}</span>
-          <button
-            type="button"
-            onClick={() => setInteractionError(null)}
-            aria-label="Dismiss error"
-          >
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className="app-layout">
-        <PoseControls
-          backendState={backendState}
-          selectedBackend={selectedBackend}
-          selectedImage={selectedImage}
-          modelPath={modelPaths[selectedBackend] ?? ""}
-          estimateStatus={estimateStatus}
-          liveLocked={liveLocked}
+      <div className="desktop-shell" inert={settingsOpen ? true : undefined}>
+        <NavigationSidebar
           inputMode={inputMode}
-          onBackendChange={changeBackend}
-          onChooseImage={chooseImage}
-          onChooseModel={chooseModel}
-          onEstimate={runEstimate}
-          onRetryBackends={loadBackends}
-          onModelPathChange={(value) =>
-            setModelPaths((current) =>
-              setBackendModelPath(current, selectedBackend, value),
-            )
-          }
-          onClearImage={clearImage}
+          engineStatus={backendState.status}
+          onModeChange={changeMode}
+          onModelSetup={focusModelSetup}
+          onPreferences={() => setSettingsOpen(true)}
         />
 
-        <div className="content-column">
-          <div
-            className="input-mode-switch"
-            role="tablist"
-            aria-label="Input mode"
-          >
-            <button
-              type="button"
-              className={inputMode === "image" ? "active" : ""}
-              onClick={() => changeInputMode("image")}
-              disabled={liveLocked}
-            >
-              Image
-            </button>
+        <div className="main-workspace">
+          {interactionError &&
+            <div className="global-error" role="alert">
+              <div>
+                <strong>Action needed</strong>
+                <span>{interactionError.message}</span>
+              </div>
 
-            <button
-              type="button"
-              className={inputMode === "webcam" ? "active" : ""}
-              onClick={() => changeInputMode("webcam")}
-            >
-              Webcam
-            </button>
-
-            <button
-              type="button"
-              className={inputMode === "video" ? "active" : ""}
-              onClick={() => changeInputMode("video")}
-              disabled={liveLocked}
-            >
-              Video
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => setInteractionError(null)}
+              >
+                ×
+              </button>
+            </div>
+          }
 
           {inputMode === "image" ? (
             <ImageWorkspace
@@ -385,7 +270,7 @@ function App() {
               defaultModelPath={selectedDefaultModelPath}
               overlayOptions={overlayOptions}
               onLiveChange={setLiveLocked}
-              onPresentationChange={setWebcamPresentation}
+              onPresentationChange={handleWebcamPresentation}
             />
           ) : (
             <VideoWorkspace
@@ -396,72 +281,39 @@ function App() {
               defaultModelPath={selectedDefaultModelPath}
               overlayOptions={overlayOptions}
               onAnalysisChange={setLiveLocked}
-              onPresentationChange={setVideoPresentation}
+              onPresentationChange={handleVideoPresentation}
               onChooseVideo={chooseVideo}
             />
           )}
-
-          <div className="overlay-controls">
-            <label>
-              <input
-                type="checkbox"
-                checked={overlayOptions.skeleton}
-                onChange={(event) =>
-                  setOverlayOptions((current) => ({
-                    ...current,
-                    skeleton: event.target.checked,
-                  }))
-                }
-              />
-              Skeleton
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                checked={overlayOptions.keypoints}
-                onChange={(event) =>
-                  setOverlayOptions((current) => ({
-                    ...current,
-                    keypoints: event.target.checked,
-                  }))
-                }
-              />
-              Keypoints
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                checked={overlayOptions.boxes}
-                onChange={(event) =>
-                  setOverlayOptions((current) => ({
-                    ...current,
-                    boxes: event.target.checked,
-                  }))
-                }
-              />
-              Bounding boxes
-            </label>
-          </div>
-
-          <ResultSummary
-            result={
-              inputMode === "webcam"
-                ? webcamPresentation.result
-                : inputMode === "video"
-                  ? videoPresentation.result
-                  : poseResult
-            }
-          />
         </div>
+
+        <InspectorPanel
+          backendState={backendState}
+          selectedBackend={selectedBackend}
+          modelPath={modelPaths[selectedBackend] ?? ""}
+          controlsLocked={liveLocked}
+          mode={inputMode}
+          selectedImage={selectedImage}
+          selectedVideo={selectedVideo}
+          estimateStatus={estimateStatus}
+          result={activeResult}
+          inferenceFps={activeFps}
+          runtime={activeRuntime}
+          overlayOptions={overlayOptions}
+          compactOpen={compactInspectorOpen}
+          onBackendChange={changeBackend}
+          onChooseModel={chooseModel}
+          onModelPathChange={(value) => !liveLocked && setModelPaths((current) =>
+            setBackendModelPath(current, selectedBackend, value))
+          }
+          onRetryBackends={() => !liveLocked && loadBackends()}
+          onEstimate={runEstimate}
+          onRuntimeAction={handleInspectorAction}
+        />
       </div>
 
-      <footer className="app-footer">
-        <span>Human Pose Estimation v{packageMetadata.version}</span>
-        <span>Local processing | MediaPipe + YOLO Pose</span>
-      </footer>
-    </main>
+      <SettingsModal open={settingsOpen} appearance={appearance} onAppearanceChange={setAppearance} onClose={closeSettings} />
+    </div>
   );
 }
 

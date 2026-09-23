@@ -39,9 +39,7 @@ test("sparse YOLO-like keypoints create only observed canonical edges", () => {
       point(12, "right_shoulder", 0.7, 0.3),
     ],
   };
-
   const segments = resolveSkeletonSegments(person);
-
   assert.deepEqual(
     segments.map(({ startName, endName }) => [startName, endName]),
     [
@@ -66,7 +64,6 @@ test("multiple people retain distinct points, colors, and optional bboxes", () =
       },
     ],
   });
-
   assert.equal(people.length, 2);
   assert.notEqual(people[0].color, people[1].color);
   assert.deepEqual(people[0].bbox, {
@@ -90,28 +87,9 @@ test("result and display helpers are deterministic", () => {
     true,
   );
   assert.equal(validatePoseResult({ backend: "yolo" }), false);
-  assert.equal(
-    fileNameFromPath(String.raw`C:\Images\person.jpg`),
-    "person.jpg",
-  );
+  assert.equal(fileNameFromPath(String.raw`C:\Images\person.jpg`), "person.jpg");
   assert.equal(formatPeopleCount(1), "1 person");
   assert.equal(formatPeopleCount(3), "3 people");
-});
-
-test("separate backend model paths remain independent", () => {
-  const initial = { mediapipe: "", yolo: "" };
-  const withMediaPipe = setBackendModelPath(
-    initial,
-    "mediapipe",
-    "pose.task",
-  );
-  const withYolo = setBackendModelPath(withMediaPipe, "yolo", "pose.pt");
-
-  assert.deepEqual(withYolo, {
-    mediapipe: "pose.task",
-    yolo: "pose.pt",
-  });
-  assert.deepEqual(initial, { mediapipe: "", yolo: "" });
 });
 
 test("model status distinguishes missing, ready, custom, and absent metadata", () => {
@@ -125,6 +103,15 @@ test("model status distinguishes missing, ready, custom, and absent metadata", (
   assert.deepEqual(normalizeModelMetadata(undefined), {});
 });
 
+test("separate backend model paths remain independent", () => {
+  const initial = { mediapipe: "", yolo: "" };
+  const withMediaPipe = setBackendModelPath(initial, "mediapipe", "pose.task");
+  const withYolo = setBackendModelPath(withMediaPipe, "yolo", "pose.pt");
+
+  assert.deepEqual(withYolo, { mediapipe: "pose.task", yolo: "pose.pt" });
+  assert.deepEqual(initial, { mediapipe: "", yolo: "" });
+});
+
 test("default model hint stays project-relative and never leaks absolute paths", () => {
   assert.equal(
     getDefaultModelDisplayPath({
@@ -133,26 +120,16 @@ test("default model hint stays project-relative and never leaks absolute paths",
     "models/mediapipe/pose_landmarker.task",
   );
   assert.equal(
-    getDefaultModelDisplayPath({
-      display_path: String.raw`F:\repo\model.task`,
-    }),
+    getDefaultModelDisplayPath({ display_path: String.raw`F:\repo\model.task` }),
     "",
   );
-  assert.equal(
-    getDefaultModelDisplayPath({
-      display_path: "/repo/model.task",
-    }),
-    "",
-  );
+  assert.equal(getDefaultModelDisplayPath({ display_path: "/repo/model.task" }), "");
 });
 
 test("missing-model guidance identifies backend and logical default", () => {
   assert.deepEqual(
     withModelSetupGuidance(
-      {
-        code: "model_asset_not_found",
-        message: "hidden machine path",
-      },
+      { code: "model_asset_not_found", message: "hidden machine path" },
       "mediapipe",
       "models/mediapipe/pose_landmarker.task",
     ),

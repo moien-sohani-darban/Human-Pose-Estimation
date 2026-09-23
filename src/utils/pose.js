@@ -71,11 +71,9 @@ export function createKeypointLookup(person) {
 
 export function resolveSkeletonSegments(person) {
   const { byName } = createKeypointLookup(person);
-
   return CANONICAL_SKELETON.flatMap(([startName, endName]) => {
     const start = byName.get(startName);
     const end = byName.get(endName);
-
     return start && end ? [{ startName, endName, start, end }] : [];
   });
 }
@@ -87,26 +85,19 @@ function safeBoundingBox(bbox) {
   ) {
     return bbox;
   }
-
   return null;
 }
 
 export function buildRenderablePeople(result) {
   const people = Array.isArray(result?.people) ? result.people : [];
-
   return people.map((person, order) => {
     const keypoints = Array.isArray(person?.keypoints)
       ? person.keypoints.filter(isRenderablePoint)
       : [];
-
     const numericId = Number.isInteger(person?.person_id)
       ? person.person_id
       : order;
-
-    const colorIndex =
-      ((numericId % PERSON_COLORS.length) + PERSON_COLORS.length) %
-      PERSON_COLORS.length;
-
+    const colorIndex = ((numericId % PERSON_COLORS.length) + PERSON_COLORS.length) % PERSON_COLORS.length;
     return {
       personId: numericId,
       color: PERSON_COLORS[colorIndex],
@@ -141,7 +132,6 @@ export function getModelStatus(metadata, customPath) {
       guidance: "The selected file will be validated when the backend initializes.",
     };
   }
-
   if (metadata?.exists === true) {
     return {
       kind: "ready",
@@ -149,16 +139,14 @@ export function getModelStatus(metadata, customPath) {
       guidance: "The canonical local model file is present.",
     };
   }
-
   if (metadata?.exists === false) {
     return {
       kind: "missing",
       label: "Default model missing",
       guidance:
-        "Select a compatible local model with Browse. The logical default path is shown below; installed builds may not include model weights.",
+        "Select a compatible local model with Browse. The expected default is shown below.",
     };
   }
-
   return {
     kind: "unknown",
     label: "Model unavailable",
@@ -168,10 +156,8 @@ export function getModelStatus(metadata, customPath) {
 
 export function withModelSetupGuidance(error, backend, defaultPath = "") {
   if (error?.code !== "model_asset_not_found") return error;
-
   const backendName = backend ? backendLabel(backend) : "This backend";
   const expected = defaultPath ? ` Expected default: ${defaultPath}.` : "";
-
   return {
     ...error,
     message: `${backendName} needs a compatible local model. Select one with Browse.${expected}`,
@@ -180,16 +166,11 @@ export function withModelSetupGuidance(error, backend, defaultPath = "") {
 
 export function getDefaultModelDisplayPath(metadata) {
   const value = metadata?.display_path;
-
   if (typeof value !== "string" || !value.trim()) return "";
-
   const clean = value.trim().replaceAll("\\", "/");
-
   if (clean.startsWith("/") || /^[a-zA-Z]:\//.test(clean)) return "";
-
   return clean;
 }
-
 
 export function setBackendModelPath(modelPaths, backend, path) {
   return { ...modelPaths, [backend]: path };
@@ -197,7 +178,6 @@ export function setBackendModelPath(modelPaths, backend, path) {
 
 export function fileNameFromPath(path) {
   if (typeof path !== "string") return "Selected image";
-
   return path.split(/[\\/]/).filter(Boolean).at(-1) ?? "Selected image";
 }
 

@@ -5,7 +5,7 @@ import {
 } from "../utils/pose";
 
 const BACKEND_DESCRIPTIONS = {
-  mediapipe: "Detailed canonical 33-landmark pose estimation.",
+  mediapipe: "Detailed canonical 33-landmark estimation.",
   yolo: "Fast multi-person pose detection.",
 };
 
@@ -13,38 +13,29 @@ export default function PoseControls({
   backendState,
   selectedBackend,
   selectedImage,
+  selectedVideo,
   modelPath,
   estimateStatus,
-  liveLocked,
   inputMode,
+  controlsLocked,
   onBackendChange,
   onChooseImage,
   onChooseModel,
+  onChooseVideo,
   onEstimate,
   onRetryBackends,
   onModelPathChange,
   onClearImage,
+  onClearVideo,
 }) {
   const isProcessing = estimateStatus === "processing";
-  const controlsLocked = isProcessing || liveLocked;
-  const imageMode = inputMode === "image";
-
+  const isLocked = isProcessing || controlsLocked;
   const canEstimate = Boolean(
-    imageMode &&
-    selectedImage &&
-      selectedBackend &&
-      backendState.available.includes(selectedBackend) &&
-      !controlsLocked,
+    inputMode === "image" && selectedImage && selectedBackend && !isLocked,
   );
-
   const selectedModelMetadata = backendState.models?.[selectedBackend];
-  const selectedModelStatus = getModelStatus(
-    selectedModelMetadata,
-    modelPath,
-  );
-  const defaultDisplayPath = getDefaultModelDisplayPath(
-    selectedModelMetadata,
-  );
+  const selectedModelStatus = getModelStatus(selectedModelMetadata, modelPath);
+  const defaultDisplayPath = getDefaultModelDisplayPath(selectedModelMetadata);
 
   return (
     <aside className="control-panel" aria-label="Pose estimation controls">
@@ -52,33 +43,42 @@ export default function PoseControls({
         <div className="section-heading">
           <span className="step-number">01</span>
           <div>
-            <h2>Input image</h2>
-            <p>PNG, JPG, JPEG, BMP, or WebP</p>
+            <h2>{inputMode === "image" ? "Input image" : inputMode === "webcam" ? "Live camera" : "Input video"}</h2>
+            <p>{inputMode === "image" ? "PNG, JPG, JPEG, BMP, or WebP" : inputMode === "webcam" ? "Camera controls are in the live workspace" : "MP4, WebM, MOV, or M4V"}</p>
           </div>
         </div>
-
-        <button
-          type="button"
+        {inputMode === "image" && <button
           className="secondary-button full-width"
           onClick={onChooseImage}
-          disabled={controlsLocked || !imageMode}
+          disabled={isLocked}
         >
           {selectedImage ? "Choose another image" : "Choose image"}
-        </button>
-
-        {selectedImage && (
+        </button>}
+        {inputMode === "image" && selectedImage && (
           <div className="selected-file">
             <div>
               <span>Selected</span>
               <strong title={selectedImage.path}>{selectedImage.name}</strong>
             </div>
-
-            <button
-              type="button"
-              className="text-button"
-              onClick={onClearImage}
-              disabled={controlsLocked || !imageMode}
-            >
+            <button className="text-button" onClick={onClearImage} disabled={isLocked}>
+              Clear
+            </button>
+          </div>
+        )}
+        {inputMode === "video" && <button
+          className="secondary-button full-width"
+          onClick={onChooseVideo}
+          disabled={isLocked}
+        >
+          {selectedVideo ? "Choose another video" : "Choose video"}
+        </button>}
+        {inputMode === "video" && selectedVideo && (
+          <div className="selected-file">
+            <div>
+              <span>Selected</span>
+              <strong title={selectedVideo.path}>{selectedVideo.name}</strong>
+            </div>
+            <button className="text-button" onClick={onClearVideo} disabled={isLocked}>
               Clear
             </button>
           </div>
@@ -90,14 +90,12 @@ export default function PoseControls({
           <span className="step-number">02</span>
           <div>
             <h2>Pose backend</h2>
-            <p>Availability comes from the local Python engine</p>
+            <p>Availability comes from the Python engine</p>
           </div>
-
           <button
-            type="button"
             className="icon-button"
             onClick={onRetryBackends}
-            disabled={backendState.status === "loading" || controlsLocked}
+            disabled={backendState.status === "loading" || isLocked}
             aria-label="Refresh backend availability"
             title="Refresh backend availability"
           >
@@ -107,18 +105,14 @@ export default function PoseControls({
 
         {backendState.status === "loading" && (
           <div className="inline-status" role="status">
-            Starting pose engine…
+            <span className="spinner small" /> Starting pose engine…
           </div>
         )}
 
         {backendState.status === "error" && (
           <div className="inline-error" role="alert">
-            <p>{backendState.error?.message}</p>
-            <button
-              type="button"
-              className="text-button"
-              onClick={onRetryBackends}
-            >
+            <p>{backendState.error.message}</p>
+            <button className="text-button" onClick={onRetryBackends}>
               Retry
             </button>
           </div>
@@ -127,11 +121,7 @@ export default function PoseControls({
         {backendState.status === "ready" && (
           <>
             {backendState.available.length > 0 ? (
-              <div
-                className="backend-list"
-                role="radiogroup"
-                aria-label="Backend"
-              >
+              <div className="backend-list" role="radiogroup" aria-label="Backend">
                 {backendState.available.map((backend) => (
                   <label
                     className={`backend-option ${
@@ -145,7 +135,7 @@ export default function PoseControls({
                       value={backend}
                       checked={selectedBackend === backend}
                       onChange={() => onBackendChange(backend)}
-                      disabled={controlsLocked}
+                      disabled={isLocked}
                     />
                     <span>
                       <strong>{backendLabel(backend)}</strong>
@@ -153,23 +143,13 @@ export default function PoseControls({
                         {BACKEND_DESCRIPTIONS[backend] ??
                           "Available pose-estimation backend."}
                       </small>
-                      <small
-                        className={`backend-model-state ${
-                          getModelStatus(
-                            backendState.models?.[backend],
-                            "",
-                          ).kind
-                        }`}
-                      >
-                        {
-                          getModelStatus(
-                            backendState.models?.[backend],
-                            "",
-                          ).label
-                        }
+                      <small className={`backend-model-state ${getModelStatus(
+                        backendState.models?.[backend],
+                        "",
+                      ).kind}`}>
+                        {getModelStatus(backendState.models?.[backend], "").label}
                       </small>
                     </span>
-
                     <span
                       className="availability-dot"
                       role="img"
@@ -179,9 +159,7 @@ export default function PoseControls({
                 ))}
               </div>
             ) : (
-              <p className="empty-backends">
-                No pose backend is currently available.
-              </p>
+              <p className="empty-backends">No pose backend is currently available.</p>
             )}
 
             {backendState.unavailable.map((backend) => (
@@ -189,9 +167,7 @@ export default function PoseControls({
                 <span>{backendLabel(backend)}</span>
                 <small>
                   Unavailable
-                  {backend === "mmpose"
-                    ? " in the current Python environment"
-                    : ""}
+                  {backend === "mmpose" ? " in the current Python environment" : ""}
                 </small>
               </div>
             ))}
@@ -199,7 +175,7 @@ export default function PoseControls({
         )}
       </section>
 
-      <section className="control-section">
+      <section className="control-section model-section">
         <div className="section-heading">
           <span className="step-number">03</span>
           <div>
@@ -207,13 +183,9 @@ export default function PoseControls({
             <p>Use the default or select a compatible local model</p>
           </div>
         </div>
-
         <label className="field-label" htmlFor="model-path">
-          {selectedBackend
-            ? `${backendLabel(selectedBackend)} model path`
-            : "Model path"}
+          {selectedBackend ? `${backendLabel(selectedBackend)} model path` : "Model path"}
         </label>
-
         <div className="path-input-row">
           <input
             id="model-path"
@@ -225,20 +197,17 @@ export default function PoseControls({
                 ? `Default: ${defaultDisplayPath}`
                 : "Optional custom model path"
             }
-            disabled={!selectedBackend || controlsLocked}
+            disabled={!selectedBackend || isLocked}
             spellCheck="false"
           />
-
           <button
-            type="button"
             className="browse-button"
             onClick={onChooseModel}
-            disabled={!selectedBackend || controlsLocked}
+            disabled={!selectedBackend || isLocked}
           >
             Browse
           </button>
         </div>
-
         {selectedBackend && (
           <div
             className={`model-status model-status-${selectedModelStatus.kind}`}
@@ -248,26 +217,31 @@ export default function PoseControls({
             <span>{selectedModelStatus.guidance}</span>
           </div>
         )}
-
-        {defaultDisplayPath ? (
+        {defaultDisplayPath && (
           <p className="field-hint">
             Default: <code>{defaultDisplayPath}</code>
           </p>
-        ) : (
+        )}
+        {!defaultDisplayPath && (
           <p className="field-hint">
-            Leave blank to use the backend&apos;s default local path.
+            Leave blank to use the backend’s default local path.
           </p>
         )}
       </section>
 
-      <button
-        type="button"
+      {inputMode === "image" && <button
         className="primary-button"
         onClick={onEstimate}
         disabled={!canEstimate}
       >
-        {isProcessing ? "Running pose estimation…" : "Estimate Pose"}
-      </button>
+        {isProcessing ? (
+          <>
+            <span className="spinner" /> Running pose estimation…
+          </>
+        ) : (
+          "Estimate Pose"
+        )}
+      </button>}
     </aside>
   );
 }
