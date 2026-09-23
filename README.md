@@ -1,31 +1,494 @@
-# Human Pose Estimation
+<div align="center">
 
-**A local Windows desktop application for pose estimation across images, webcams, and video files using MediaPipe and YOLO Pose.**
+# 🧍 Human Pose Estimation
 
-![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=0B1723)
-![Tauri](https://img.shields.io/badge/Tauri-2-24C8D8?logo=tauri&logoColor=white)
-![Rust](https://img.shields.io/badge/Rust-2021-000000?logo=rust&logoColor=white)
-![Platform](https://img.shields.io/badge/Platform-Windows%20x64-0078D4?logo=windows11&logoColor=white)
+### A multi-backend desktop application for human pose estimation across images, webcam streams, and video files
 
-Human Pose Estimation combines a React interface, a Tauri/Rust desktop bridge, and a packaged Python computer-vision engine. Inference stays on the local machine: there is no web server, cloud inference service, or implicit model download.
+A local-first computer vision application built with **React**, **Tauri**, **Rust**, and **Python**, supporting both **MediaPipe Pose Landmarker** and **YOLO Pose** through a unified pose-estimation engine.
 
-## Highlights
+<br>
 
-- Still-image pose estimation with an aligned SVG overlay
-- Explicit, bounded live webcam inference
-- Local video playback with fresh-frame pose sampling
-- MediaPipe 33-landmark and Ultralytics YOLO Pose backends
-- Backend-independent pose contract with deterministic keypoint identities
-- Multi-person skeletons, keypoints, and optional bounding boxes
-- Persistent Python sidecar with typed Rust ↔ Python errors
-- Custom local model selection and deterministic default paths
-- Offline-friendly runtime behavior with no silent downloads
-- Bundled Python 3.13.5 runtime and Windows NSIS installer
+[![Python](https://img.shields.io/badge/Python-3.13.5-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?style=for-the-badge&logo=tauri&logoColor=white)](https://tauri.app/)
+[![Rust](https://img.shields.io/badge/Rust-Desktop%20Bridge-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![MediaPipe](https://img.shields.io/badge/MediaPipe-Pose-0097A7?style=for-the-badge)](https://ai.google.dev/edge/mediapipe/)
+[![YOLO](https://img.shields.io/badge/YOLO-Pose-111111?style=for-the-badge)](https://docs.ultralytics.com/tasks/pose/)
 
-## Screenshots
+<br>
 
-Real release screenshots are not yet checked into the repository. Product screenshots should be captured from a clean release build—without terminals or personal file paths—and added as:
+[Overview](#-overview) •
+[Features](#-features) •
+[Architecture](#-architecture) •
+[Backends](#-supported-backends) •
+[Installation](#-installation) •
+[Development](#-development) •
+[Testing](#-testing)
+
+</div>
+
+---
+
+## 📌 Overview
+
+**Human Pose Estimation** is a local Windows desktop application for estimating human body poses from:
+
+- Still images
+- Live webcam input
+- Local video files
+
+The application combines a modern React interface with a Tauri/Rust desktop layer and a persistent Python computer-vision engine.
+
+Instead of coupling the interface directly to one pose-estimation library, the project uses a backend-independent pose contract that allows different inference engines to expose results through one normalized representation.
+
+Currently supported pose backends include:
+
+- **MediaPipe Pose Landmarker**
+- **Ultralytics YOLO Pose**
+
+All inference runs locally on the user's machine. The application does not rely on a web server or cloud inference service.
+
+---
+
+## ✨ Features
+
+- 🖼️ Human pose estimation from still images
+- 📷 Live webcam pose estimation
+- 🎬 Pose analysis for local video files
+- 🧠 Multiple pose-estimation backends
+- 🧍 Multi-person pose support
+- 🦴 Skeleton and keypoint visualization
+- 📦 Optional person bounding boxes
+- 🔄 Backend-independent pose representation
+- ⚡ Persistent Python inference process
+- 🔐 Typed Rust ↔ Python communication
+- 📴 Offline-friendly runtime behavior
+- 📂 Custom local model selection
+- 🧩 Explicit model-asset handling
+- 🪟 Native Windows desktop packaging
+- 🧪 Python, frontend, and Rust test suites
+
+---
+
+## 🎬 Application Modes
+
+### Image Mode
+
+Load a supported image and estimate one or more human poses.
+
+The interface can display:
+
+- keypoints
+- skeleton connections
+- bounding boxes
+- detected person count
+- image dimensions
+- inference backend
+- processing time
+
+### Webcam Mode
+
+The application supports live webcam estimation using bounded frame processing.
+
+Only one inference request is kept active at a time, preventing stale frames from building up when inference is slower than the webcam preview.
+
+### Video Mode
+
+Local videos can be played using native video controls while pose analysis samples fresh frames during playback.
+
+Old results are discarded after seeking or when they fall too far behind the current playback position.
+
+---
+
+## 🧠 How It Works
+
+The system separates the desktop interface from the computer-vision engine.
+
+```text
+┌───────────────────────────────┐
+│          Input Source         │
+│                               │
+│   Image   Webcam   Video      │
+└───────────────┬───────────────┘
+                │
+                ▼
+┌───────────────────────────────┐
+│          React UI             │
+│                               │
+│ Preview • Controls • Overlay  │
+└───────────────┬───────────────┘
+                │
+         Tauri Commands
+                │
+                ▼
+┌───────────────────────────────┐
+│        Rust / Tauri           │
+│                               │
+│   Sidecar Process Manager     │
+│ Request IDs • Timeouts        │
+└───────────────┬───────────────┘
+                │
+          NDJSON IPC
+                │
+                ▼
+┌───────────────────────────────┐
+│      Python Sidecar           │
+│                               │
+│         PoseEngine            │
+└───────────┬─────────┬─────────┘
+            │         │
+            ▼         ▼
+      MediaPipe      YOLO Pose
+            │         │
+            └────┬────┘
+                 ▼
+        Unified PoseResult
+                 │
+                 ▼
+          SVG Pose Overlay
+```
+
+---
+
+## 🏗️ Architecture
+
+The project uses a persistent sidecar architecture rather than starting a Python process for every inference request.
+
+This design provides several advantages:
+
+- model instances can be reused
+- repeated Python startup overhead is avoided
+- communication remains explicit and testable
+- frontend code stays independent of backend-specific inference objects
+- long-running webcam and video analysis remains memory-bounded
+
+Communication between Rust and Python uses line-delimited JSON over standard process streams.
+
+---
+
+## 🔌 Supported Backends
+
+| Backend | Status | Output |
+| :--- | :---: | :--- |
+| **MediaPipe Pose Landmarker** | ✅ Supported | Up to 33 canonical landmarks |
+| **YOLO Pose** | ✅ Supported | COCO 17-keypoint pose observations, including multi-person output |
+| **MMPose** | ⚠️ Unavailable | Current Python 3.13 / Windows dependency stack is not reproducible |
+
+Both supported backends are normalized into the same application-level pose contract.
+
+This means the React interface and Rust bridge do not need backend-specific rendering logic.
+
+---
+
+## 🧩 Unified Pose Representation
+
+One of the key design decisions in this project is the use of a backend-independent pose model.
+
+Instead of exposing raw MediaPipe or Ultralytics objects to the application, each backend is adapted into a common `PoseResult` structure.
+
+Conceptually:
+
+```text
+MediaPipe Result ─┐
+                  │
+                  ├──► PoseResult ───► Application
+                  │
+YOLO Pose Result ─┘
+```
+
+This makes backend selection transparent to the rest of the application.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+| :--- | :--- |
+| **Interface** | React 19, Vite 7, JavaScript |
+| **Desktop Shell** | Tauri 2 |
+| **Native Bridge** | Rust |
+| **Vision Engine** | Python 3.13.5 |
+| **Image Processing** | OpenCV, NumPy |
+| **Pose Backend** | MediaPipe Tasks |
+| **Pose Backend** | Ultralytics YOLO Pose |
+| **IPC** | Persistent NDJSON over process streams |
+| **Packaging** | PyInstaller, Tauri, NSIS |
+| **Target Platform** | Windows x64 |
+
+---
+
+## 📁 Project Structure
+
+```text
+Human-Pose-Estimation/
+│
+├── src/
+│   └── React user interface, overlays, and media schedulers
+│
+├── src-tauri/
+│   └── Rust bridge, Tauri commands, sidecar management, and packaging
+│
+├── python-engine/
+│   └── Pose backends, PoseEngine, protocol, serialization, and tests
+│
+├── scripts/
+│   └── Development and Windows release automation
+│
+├── index.html
+├── package.json
+├── vite.config.js
+├── yarn.lock
+├── .gitignore
+└── README.md
+```
+
+---
+
+## 📦 Model Setup
+
+Model weights are intentionally kept external to the repository.
+
+The application does not silently download pose models.
+
+### MediaPipe
+
+Default development location:
+
+```text
+python-engine/models/mediapipe/pose_landmarker.task
+```
+
+### YOLO Pose
+
+Default development location:
+
+```text
+python-engine/models/yolo/yolo11n-pose.pt
+```
+
+Users can also select compatible local model files through the application interface.
+
+---
+
+## 🚀 Installation
+
+### Windows Application
+
+The packaged application targets:
+
+```text
+Windows 11 x64
+```
+
+The release build includes the Python runtime and required Python dependencies.
+
+End users therefore do **not** need to separately install:
+
+- Python
+- pip
+- Node.js
+- Rust
+- Tauri
+
+The current installer is generated using NSIS.
+
+> The installer is currently unsigned, so Windows SmartScreen may display a warning.
+
+---
+
+## 💻 Development
+
+### Requirements
+
+For source development:
+
+- Windows 11 x64
+- Node.js
+- Yarn 1.x
+- Rust toolchain
+- Tauri Windows prerequisites
+- Python 3.13.5
+
+### Python Environment
+
+From the repository root:
+
+```powershell
+python -m venv python-engine\.venv
+```
+
+Install Python dependencies:
+
+```powershell
+.\python-engine\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\python-engine\.venv\Scripts\python.exe -m pip install -e ".\python-engine[test]"
+```
+
+Install frontend dependencies:
+
+```powershell
+yarn install
+```
+
+Run the desktop application in development mode:
+
+```powershell
+yarn tauri dev
+```
+
+---
+
+## 🏭 Production Build
+
+Install the packaging dependencies:
+
+```powershell
+.\python-engine\.venv\Scripts\python.exe -m pip install -e ".\python-engine[package]"
+```
+
+Run the Windows release build:
+
+```powershell
+.\scripts\build-windows-release.ps1
+```
+
+The build process:
+
+1. verifies the expected Python runtime
+2. packages the Python sidecar
+3. smoke-tests the packaged sidecar
+4. embeds the runtime into the Tauri application
+5. builds the frontend
+6. builds the Rust desktop shell
+7. creates an NSIS Windows installer
+
+Generated installers are placed under:
+
+```text
+src-tauri/target/release/bundle/nsis/
+```
+
+---
+
+## 🧪 Testing
+
+The repository contains separate test suites for Python, frontend, and Rust components.
+
+### Frontend
+
+```bash
+yarn test
+yarn build
+```
+
+### Python
+
+```powershell
+cd python-engine
+
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pytest -m integration -ra
+```
+
+### Rust / Tauri
+
+```powershell
+cd src-tauri
+
+cargo fmt --check
+cargo check --locked
+cargo test --locked
+cargo clippy --locked -- -D warnings
+```
+
+The latest verified project state includes:
+
+```text
+243 Python tests passed
+43 frontend tests passed
+23 active Rust tests passed
+```
+
+The packaged Python sidecar smoke test and packaged-runtime protocol checks also pass.
+
+---
+
+## ⚙️ Engineering Highlights
+
+Some of the main engineering decisions behind the project include:
+
+### Persistent Python Sidecar
+
+Python remains alive between requests, allowing initialized pose estimators to be reused.
+
+### Backend Abstraction
+
+MediaPipe and YOLO Pose are hidden behind one application-level estimator contract.
+
+### Typed Error Propagation
+
+Structured error codes are preserved across:
+
+```text
+Python
+  ↓
+NDJSON
+  ↓
+Rust
+  ↓
+React
+```
+
+while the UI presents safe, readable guidance to users.
+
+### Bounded Live Processing
+
+Webcam and video analysis keep at most one inference request active.
+
+This prevents unbounded frame queues and stale inference results.
+
+### Explicit Model Assets
+
+Model downloads never happen implicitly.
+
+This keeps the application deterministic and makes offline usage possible.
+
+---
+
+## ⚠️ Current Limitations
+
+- Windows x64 is currently the only packaged target
+- The Windows installer is unsigned
+- Production packaging currently uses CPU-only Torch
+- Model files must be provided separately
+- MMPose is currently unavailable in the supported Python/Windows environment
+- Temporal tracking and pose smoothing are not implemented
+- Action recognition is not implemented
+- Processed video export is not currently supported
+
+---
+
+## 🗺️ Roadmap
+
+Potential future improvements include:
+
+- [ ] Project-specific application icon
+- [ ] Signed Windows release
+- [ ] Public downloadable installer
+- [ ] GPU-enabled production package
+- [ ] Cross-platform desktop builds
+- [ ] Temporal pose smoothing
+- [ ] Multi-frame person tracking
+- [ ] Action recognition
+- [ ] Processed video export
+- [ ] Additional pose-estimation backends
+- [ ] Revisit MMPose when dependency support improves
+
+---
+
+## 📸 Screenshots
+
+Real application screenshots should be added to:
 
 ```text
 docs/images/image-mode.png
@@ -33,233 +496,88 @@ docs/images/webcam-mode.png
 docs/images/video-mode.png
 ```
 
-No mockup is used here as evidence of the running application.
+Recommended README layout:
 
-## Architecture
+```markdown
+### Image Mode
 
-```mermaid
-flowchart LR
-    subgraph Inputs
-        I[Image path]
-        W[Webcam frame]
-        V[Video frame]
-    end
+![Image Mode](docs/images/image-mode.png)
 
-    I --> UI[React UI]
-    W --> UI
-    V --> UI
-    UI -->|typed Tauri invoke| R[Rust sidecar manager]
-    R -->|persistent stdin/stdout NDJSON| P[Packaged Python sidecar]
-    P --> E[PoseEngine]
-    E --> M[MediaPipe Tasks]
-    E --> Y[YOLO Pose]
-    M --> C[Unified PoseResult]
-    Y --> C
-    C --> R
-    R --> UI
-    UI --> O[SVG pose overlay]
+### Webcam Mode
+
+![Webcam Mode](docs/images/webcam-mode.png)
+
+### Video Mode
+
+![Video Mode](docs/images/video-mode.png)
 ```
 
-### Why this design?
+Using real release screenshots is preferable to using mockups because it shows the actual application state.
 
-- **Persistent sidecar:** Python and initialized pose models are reused instead of starting a new process for every inference.
-- **NDJSON process protocol:** local IPC stays explicit and testable without introducing an HTTP server.
-- **Backend-independent contract:** application code consumes one `PoseResult` schema rather than MediaPipe or Ultralytics objects.
-- **Fresh-frame backpressure:** webcam and video analysis allow one request in flight. If inference is slower than the source, stale frames are skipped rather than queued.
-- **Explicit model assets:** model downloads never happen implicitly, keeping startup deterministic and offline-friendly.
+---
 
-More engine and protocol detail is available in the [Python engine documentation](python-engine/README.md).
+## 🎯 Project Purpose
 
-## Tech Stack
+This project explores both the computer-vision and software-engineering aspects of deploying pose-estimation models in a desktop application.
 
-| Layer | Technologies |
-|---|---|
-| Interface | React 19, Vite 7, JavaScript |
-| Desktop shell | Tauri 2, Rust |
-| Vision engine | Python 3.13.5, OpenCV, NumPy |
-| Pose backends | MediaPipe Tasks, Ultralytics YOLO Pose |
-| Local IPC | Persistent line-delimited JSON over process streams |
-| Packaging | PyInstaller `onedir`, Tauri, NSIS |
+It demonstrates:
 
-## Supported Backends
+- human pose estimation
+- multi-backend computer vision
+- model abstraction
+- local process communication
+- desktop application architecture
+- live-media processing
+- Rust/Python integration
+- React visualization
+- Windows application packaging
+- automated testing across multiple technology stacks
 
-| Backend | Status | Contract behavior |
-|---|---|---|
-| MediaPipe | Supported | Up to 33 canonical landmarks with relative depth-like `z` values |
-| YOLO Pose | Supported | COCO 17-keypoint observations mapped into the canonical schema; multi-person output |
-| MMPose | Unavailable | No reproducible supported MMCV stack for the current Python 3.13/Windows environment |
+---
 
-The project does not make unsupported accuracy or performance comparisons between backends.
+## 🤝 Contributing
 
-## Installation
+Contributions, suggestions, and issue reports are welcome.
 
-### Windows users
+1. Fork the repository
+2. Create a feature branch
 
-The packaged release targets Windows 11 x64. There is currently no public download link; use the installer produced by the release build or supplied by the project maintainer.
-
-1. Run the generated NSIS installer.
-2. Launch **Human Pose Estimation**.
-3. Select a compatible local model when the default model is reported missing.
-4. Choose Image, Webcam, or Video mode.
-
-The installed application includes Python and its runtime dependencies. End users do not need Python, pip, Rust, Node.js, or the source repository.
-
-The installer is currently unsigned, so Windows SmartScreen may display a warning for locally built packages.
-
-## Model Setup
-
-Model weights are intentionally external because redistribution terms have not been established for this project. The application does not download them automatically.
-
-| Backend | Expected development default | Custom selection |
-|---|---|---|
-| MediaPipe | `models/mediapipe/pose_landmarker.task` | Select a compatible `.task` file with **Browse** |
-| YOLO Pose | `models/yolo/yolo11n-pose.pt` | Select a compatible `.pt` file with **Browse** |
-
-Inside the source checkout, place defaults under `python-engine/`:
-
-```text
-python-engine/models/mediapipe/pose_landmarker.task
-python-engine/models/yolo/yolo11n-pose.pt
+```bash
+git checkout -b feature/your-feature
 ```
 
-In an installed build, use **Browse** to select a compatible model when no default is present; users are not expected to find a source-repository directory. File presence means only that an asset exists—backend initialization remains the compatibility check.
+3. Commit your changes
 
-Official references:
-
-- [MediaPipe Pose Landmarker models](https://developers.google.com/edge/mediapipe/solutions/vision/pose_landmarker#models)
-- [Ultralytics pose estimation documentation](https://docs.ultralytics.com/tasks/pose/)
-
-Review the model provider's current terms before redistributing weights.
-
-## Usage
-
-### Image
-
-1. Choose a PNG, JPEG, BMP, or WebP image.
-2. Select MediaPipe or YOLO Pose and confirm a model is available.
-3. Select **Estimate Pose**.
-4. Inspect the overlay and backend, people, dimensions, and processing-time summary.
-
-### Webcam
-
-1. Select **Start camera** and approve Windows camera permission.
-2. Select **Start live pose** when the preview is ready.
-3. Stop live pose or the camera independently when finished.
-
-Camera preview rate and inference FPS are separate. Live estimation captures bounded JPEG frames and keeps at most one inference request active.
-
-### Video
-
-1. Choose a local MP4, WebM, MOV, or M4V file supported by WebView2.
-2. Use the native video controls to play, pause, or seek.
-3. Select **Start pose analysis** explicitly.
-
-Video frames are sampled rather than queued. Seeking invalidates older work, and results too far behind the current playback position are discarded.
-
-## Development
-
-### Requirements
-
-- Windows 11 x64 and WebView2
-- Node.js with Yarn 1.x
-- Rust toolchain and [Tauri Windows prerequisites](https://v2.tauri.app/start/prerequisites/)
-- Python 3.13.5
-
-### Setup
-
-From PowerShell in the repository root:
-
-```powershell
-python -m venv python-engine\.venv
-.\python-engine\.venv\Scripts\python.exe -m pip install --upgrade pip
-.\python-engine\.venv\Scripts\python.exe -m pip install -e ".\python-engine[test]"
-yarn install
-yarn tauri dev
+```bash
+git commit -m "Add new feature"
 ```
 
-Development starts `.venv\Scripts\python.exe -m app.main` from `python-engine`. `HPE_PYTHON_EXECUTABLE` and `HPE_PYTHON_ENGINE_DIR` are development-only overrides.
+4. Push the branch
 
-## Production Build
-
-Install the pinned packaging extras, then run the coordinated release script:
-
-```powershell
-.\python-engine\.venv\Scripts\python.exe -m pip install -e ".\python-engine[package]"
-.\scripts\build-windows-release.ps1
+```bash
+git push origin feature/your-feature
 ```
 
-The script verifies Python 3.13.5, builds and smoke-tests the PyInstaller sidecar, embeds it as a Tauri resource, builds the frontend/Rust application, and creates an unsigned NSIS installer under:
+5. Open a Pull Request
 
-```text
-src-tauri/target/release/bundle/nsis/
-```
+---
 
-Production ignores development interpreter overrides and never falls back to system Python. Generated runtimes, installers, models, and build directories are excluded from Git.
+## 👤 Author
 
-## Testing
+<div align="center">
 
-The repository has deterministic unit and transport tests that do not require a GPU, network connection, webcam, video file, or model weights. Real backend integration tests skip cleanly when their local model is absent.
+### Moien Sohani Darban
 
-```powershell
-# Frontend
-yarn test
-yarn build
+[![GitHub](https://img.shields.io/badge/GitHub-moiensohani-181717?style=for-the-badge&logo=github)](https://github.com/moien-sohani-darban)
 
-# Python
-cd python-engine
-.\.venv\Scripts\python.exe -m pytest
-.\.venv\Scripts\python.exe -m pytest -m integration -ra
+</div>
 
-# Rust / Tauri
-cd ..\src-tauri
-cargo fmt --check
-cargo check --locked
-cargo test --locked
-cargo clippy --locked -- -D warnings
+---
 
-# Frozen protocol/runtime
-cd ..
-.\scripts\test-packaged-sidecar.ps1 -Executable `
-  .\python-engine\dist\hpe-python-sidecar\hpe-python-sidecar.exe
-```
+<div align="center">
 
-Coverage includes pose-contract validation, both backend adapters, visualization, engine selection/lifecycle, NDJSON parsing and recovery, process correlation/timeouts, model discovery, image/frame transport, live-media freshness, UI rendering, and packaged dependency imports.
+### ⭐ If you find this project useful, consider giving it a star.
 
-Latest verified results: **243 Python tests**, **43 frontend tests**, and **23 active Rust tests** passed. The packaged-runtime Rust test also passed when run explicitly, and the packaged Python sidecar smoke test passed independently.
+**Built with React, Tauri, Rust, Python, MediaPipe, and YOLO Pose**
 
-## Project Structure
-
-```text
-src/             React interface, overlays, and bounded media schedulers
-src-tauri/       Rust process bridge, Tauri commands, and Windows packaging
-python-engine/   Pose contracts, backends, PoseEngine, protocol, and tests
-scripts/         Reproducible Python and Windows release automation
-```
-
-## Engineering Highlights
-
-- Normalizes MediaPipe and YOLO into one typed, backend-neutral result model.
-- Preserves structured error codes across Python, NDJSON, Rust, and React while presenting safe user guidance.
-- Reuses one lazily initialized estimator per backend inside a persistent process.
-- Enforces request IDs, response correlation, timeouts, process-health reset, and clean shutdown.
-- Keeps long-running webcam/video analysis memory-bounded with one-in-flight scheduling.
-- Resolves development and frozen resources independently of the current working directory.
-- Verifies packaged native imports and real Rust → frozen-Python protocol traffic before release.
-
-## Limitations
-
-- Packaged releases currently target Windows x64 only.
-- The installer is unsigned.
-- Production bundles the CPU-only Torch runtime; no CUDA package is included.
-- Model weights are external and must be selected or placed manually.
-- MMPose is unavailable under the current Python 3.13/Windows native dependency constraints.
-- The application does not provide temporal tracking, smoothing, action recognition, or video export.
-- Real release screenshots and a custom project icon are not yet included.
-- No license file has been selected for the repository.
-
-## Future Work
-
-- Add a signed Windows release and project-specific icon.
-- Add optional GPU packaging after a separate compatibility and size review.
-- Revisit MMPose when its native dependency stack supports this environment reproducibly.
-- Consider tracking/smoothing and cross-platform installers as separate, scoped features.
+</div>
